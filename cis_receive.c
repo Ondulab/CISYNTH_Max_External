@@ -18,13 +18,18 @@
 
 t_class *cisReceiveclass;		// global pointer to the object class - so max can reference the object
 
-void ext_main(void *r)
-{
-	t_class *c;																											// pointer to a class type
-	c = class_new("cis_receive", (method)cisReceive_new, (method)cisReceive_free, sizeof(t_cisReceive), 0L, A_GIMME, 0); 	// class_new() loads our external's class into Max's memory so it can be used in a patch
-	class_register(CLASS_BOX, c);																						// register to CLASS_BOX type for max environment
-	cisReceiveclass = c;
-	post("cis_receive v0.05 - 21.12.2023");
+void ext_main(void *r) {
+    t_class *c;
+
+    c = class_new("cis_receive",
+                  (method)cisReceive_new,
+                  (method)cisReceive_free,
+                  sizeof(t_cisReceive),
+                  0L, A_GIMME, 0);
+
+    class_register(CLASS_BOX, c);
+    cisReceiveclass = c;
+    post("cis_receive v0.07 - 21.12.2023");
 }
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -33,8 +38,23 @@ void ext_main(void *r)
 
 void *cisReceive_new(t_symbol *s, long argc, t_atom *argv)
 {
-	t_cisReceive *x = (t_cisReceive *)object_alloc(cisReceiveclass);
-
+    t_cisReceive *x = (t_cisReceive *)object_alloc(cisReceiveclass);
+    if (!x) {
+        post("Erreur : Allocation de t_cisReceive a échoué.");
+        return NULL;
+    }
+    
+    // Initialisez les membres à des valeurs par défaut sûres
+    x->fd = 0;
+    x->listener = NULL;
+    x->listening = 0;
+    x->image_buffer = NULL;
+    x->matrix = NULL;
+    x->outlet_list = NULL;
+    x->outlet_jit = NULL;
+    x->multicast = NULL;
+    x->port = DEFAULT_PORT; // Assurez-vous que DEFAULT_PORT est défini correctement
+    
     post("new udpReceive");
     
 	// HANDLE ARGUMENTS
@@ -42,6 +62,20 @@ void *cisReceive_new(t_symbol *s, long argc, t_atom *argv)
 		x->port = DEFAULT_PORT;
 		x->multicast = DEFAULT_MULTI;
         post("Defaut port :%d", DEFAULT_PORT);
+        
+        x->outlet_list = outlet_new(x, NULL); // Outlet pour la liste d'atoms
+        x->outlet_jit = outlet_new(x, "jit_matrix"); // Outlet pour la matrice Jitter
+        x->matrix = jit_object_new(gensym("jit_matrix"), 4, "char", CIS_PIXELS_NB, 900);
+
+        if (!x->matrix) {
+            object_error((t_object*)x, "Erreur de création de la matrice Jitter");
+            // Libérez les ressources précédemment allouées ici
+            if (x->image_buffer) {
+                sysmem_freeptr(x->image_buffer);
+            }
+            // Autres nettoyages si nécessaire
+            return NULL;
+        }
 	}
 	else {
 	ARG_FAULT:
@@ -60,7 +94,6 @@ void *cisReceive_new(t_symbol *s, long argc, t_atom *argv)
 	if (syssock_set(x) < 0) goto NOT_VALID;
 	
 	// CREATE OUTLET
-	x->outlet = outlet_new(x, NULL);
 	return(x);
 
 NOT_VALID:
@@ -68,23 +101,43 @@ NOT_VALID:
 	return(x);
 }
 
-void cisReceive_free(t_cisReceive *x)
-{
-	if (x->listener)
-	{
-		x->listening = false;
-		if (x->fd) {
-			syssock_dropmulticast(x->fd, x->multicast);
-			syssock_close(x->fd);
-		}
-		systhread_join(x->listener, NULL);
-		x->listener = NULL;
-	}
-    // Libérer le buffer d'image
+void cisReceive_free(t_cisReceive *x) {
+    // Vérifiez si le thread d'écoute est en cours et arrêtez-le si nécessaire
+    if (x->listener) {
+        x->listening = false; // Marquer l'état d'écoute comme faux pour arrêter le thread
+        systhread_join(x->listener, NULL); // Attendre que le thread d'écoute se termine
+        x->listener = NULL;
+    }
+
+    // Fermez le socket si ouvert
+    if (x->fd) {
+        syssock_close(x->fd);
+        x->fd = 0;
+    }
+
+    // Libérez le buffer d'image si alloué
     if (x->image_buffer) {
         sysmem_freeptr(x->image_buffer);
+        x->image_buffer = NULL;
     }
+
+    // Libérez la matrice Jitter si allouée
+    if (x->matrix) {
+        jit_object_free(x->matrix);
+        x->matrix = NULL;
+    }
+
+    // Si multicast est un pointeur alloué dynamiquement, libérez-le ici
+    // (Cela dépend de la façon dont multicast est utilisé et alloué dans votre code)
+    // if (x->multicast) {
+    //     sysmem_freeptr(x->multicast);
+    //     x->multicast = NULL;
+    // }
+
+    // Notez que les outlets (outlet_list et outlet_jit) sont gérés par le système Max,
+    // donc vous n'avez pas besoin de les libérer manuellement ici.
 }
+
 
 void cisReceiveassist(t_cisReceive *x, void *b, long m, long a, char *s) {
 	if (m == ASSIST_INLET)
@@ -101,6 +154,84 @@ void cisReceive_read(t_cisReceive *x) {
     uint8_t msgbuf[UDP_PACKET_SIZE];
     uint32_t nbytes;
     socklen_t addrlen = sizeof(x->addr);
+    t_jit_matrix_info matrix_info;
+    char *matrix_data;
+    void *matrix_lock;
+    
+    while (x->listening) {
+        nbytes = (uint32_t)recvfrom(x->fd, msgbuf, UDP_PACKET_SIZE, 0, (struct sockaddr *) &x->addr, &addrlen);
+        
+        if (nbytes == UDP_PACKET_SIZE) {
+            // Extraction de l'en-tête
+            uint32_t header = *((uint32_t *)msgbuf);
+
+            // Calculer le nombre de pixels à traiter
+            uint32_t numPixels = (nbytes - sizeof(int32_t)) / sizeof(int32_t);
+
+            // Vérifier si une ligne complète est reçue
+            if (header == (CIS_PIXELS_NB - (CIS_PIXELS_NB / UDP_NB_PACKET_PER_LINE))) {
+                post("start line sending");
+
+                // Verrouiller la matrice Jitter pour la mise à jour
+                matrix_lock = jit_object_method(x->matrix, _jit_sym_lock, 1);
+
+                // Obtenir les informations et les données de la matrice
+                jit_object_method(x->matrix, _jit_sym_getinfo, &matrix_info);
+                jit_object_method(x->matrix, _jit_sym_getdata, &matrix_data);
+
+                if (matrix_data) {
+                    long line_size = matrix_info.dimstride[1];
+
+                    // Déplacer les lignes existantes vers le bas
+                    for (long i = matrix_info.dim[1] - 1; i > 0; --i) {
+                        memcpy(matrix_data + i * line_size, matrix_data + (i - 1) * line_size, line_size);
+                    }
+
+                    // Traitement des données (conversion de RGBA à ARGB et insertion en haut de la matrice)
+                    for (uint32_t i = 0; i < numPixels; i++) {
+                        uint32_t rgba_pixel = *(uint32_t *)(msgbuf + ((UDP_HEADER_SIZE * sizeof(int32_t)) + (i * sizeof(uint32_t))));
+                        
+                        uint8_t alpha = 100; // Alpha fixé à 100, ajuster selon besoin
+                        uint8_t red = (rgba_pixel >> 24) & 0xFF;
+                        uint8_t green = (rgba_pixel >> 16) & 0xFF;
+                        uint8_t blue = (rgba_pixel >> 8) & 0xFF;
+
+                        uint32_t argb_pixel = (alpha << 24) | (red << 16) | (green << 8) | blue;
+                        memcpy(matrix_data + i * sizeof(uint32_t), &argb_pixel, sizeof(uint32_t));
+                    }
+                }
+
+                // Déverrouiller la matrice
+                jit_object_method(x->matrix, _jit_sym_lock, matrix_lock);
+
+                // Envoyer la liste d'atoms
+                int size = UDP_NB_PACKET_PER_LINE * UDP_PACKET_SIZE;
+                t_atom *atom_buffer = (t_atom *)sysmem_newptr(size * sizeof(t_atom));
+                for(int i = 0; i < size; i++) {
+                    atom_setlong(atom_buffer + i, (long)x->image_buffer[i]);
+                }
+                outlet_list(x->outlet_list, NULL, size, atom_buffer);
+                sysmem_freeptr(atom_buffer);
+
+                // Envoyer la matrice Jitter
+                t_atom mat_name;
+                atom_setsym(&mat_name, jit_attr_getsym(x->matrix, _jit_sym_name));
+                outlet_anything(x->outlet_jit, _jit_sym_jit_matrix, 1, &mat_name);
+            }
+        } else {
+            post("Data length is too short, ignoring");
+        }
+    }
+}
+
+void cisReceive_read_old(t_cisReceive *x) {
+    uint8_t msgbuf[UDP_PACKET_SIZE];
+    uint32_t nbytes;
+    socklen_t addrlen = sizeof(x->addr);
+    
+    t_jit_matrix_info matrix_info;
+    char *matrix_data;
+    void *matrix_lock;
 
     while (x->listening) {
         nbytes = (uint32_t)recvfrom(x->fd, msgbuf, UDP_PACKET_SIZE, 0, (struct sockaddr *) &x->addr, &addrlen);
@@ -152,7 +283,7 @@ void cisReceive_read(t_cisReceive *x) {
                 }
 
                 // Envoyer la liste d'atoms
-                outlet_list(x->outlet, NULL, size, atom_buffer);
+                outlet_list(x->outlet_list, NULL, size, atom_buffer);
 
                 // Libérer la mémoire allouée pour le tableau de t_atom
                 sysmem_freeptr(atom_buffer);

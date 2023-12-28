@@ -14,6 +14,7 @@
 #endif
 
 #include "ext_syssock.h"	    // CNMAT crossplatform socket library - should be first to avoid winsock2 redeclaration problem
+#include "jit.common.h"
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------------
 // DEFINES
@@ -51,8 +52,10 @@ typedef struct _cisReceive {    // defines our object's internal variables for e
 	t_systhread listener;		// thread
 	char* multicast;			// multicast address
 	int port;					// UDP reveiving port
-	void* outlet;				// outlet creation - inlets are automatic, but objects must "own" their own outlets
+    void* outlet_list;          // Outlet pour la liste d'atoms
+    void* outlet_jit;           // Outlet pour la matrice Jitter
     uint8_t* image_buffer;      // Buffer pour stocker une ligne complète de l'image
+    t_jit_object *matrix;
 } t_cisReceive;
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------------
