@@ -21,10 +21,8 @@
 
 //#define RGBA_BUFFER
 
-#define UDP_HEADER_SIZE                          (1)//uint32
-#define UDP_NB_PACKET_PER_LINE                   (6)
-#define UDP_NB_BYTES_PER_PIXELS                  (4)
-#define UDP_PACKET_SIZE                          (((((CIS_PIXELS_NB) / UDP_NB_PACKET_PER_LINE)) + (UDP_HEADER_SIZE)) * (UDP_NB_BYTES_PER_PIXELS))
+#define UDP_NB_PACKET_PER_LINE                   (12)
+#define UDP_PACKET_SIZE                          ((CIS_PIXELS_NB) / (UDP_NB_PACKET_PER_LINE))
 
 #define PORT                                     (55151)    //The port on which to listen for incoming data
 
@@ -53,13 +51,6 @@ typedef enum
     HID_DATA_HEADER,
 }CIS_Packet_HeaderTypeDef;
 
-typedef enum
-{
-    IMAGE_COLOR_R = 0,
-    IMAGE_COLOR_G,
-    IMAGE_COLOR_B,
-}CIS_Packet_ImageColorTypeDef;
-
 // Packet header structure defining the common header for all packet types// Structure for packets containing startup information like version info
 struct packet_StartupInfo{
     uint8_t type;                         // Identifies the data type
@@ -71,12 +62,13 @@ struct packet_StartupInfo{
 struct packet_Image{
     uint8_t type;                         // Identifies the data type
     uint32_t packet_id;                   // Sequence number, useful for ordering packets
-    uint32_t line_id;                      // Identifier for the fragment of the image
-    uint8_t fragment_id;                      // Identifier for the fragment of the image
+    uint32_t line_id;                     // Line identifier
+    uint8_t fragment_id;                  // Fragment position
     uint8_t total_fragments;              // Total number of fragments for the complete image
     uint16_t fragment_size;               // Size of this particular fragment
-    uint8_t imageColor;                   // Pointer to the fragmented image data
-    uint8_t imageData[CIS_PIXELS_NB / UDP_NB_PACKET_PER_LINE];               // Pointer to the fragmented image data
+    uint8_t imageData_R[CIS_PIXELS_NB / UDP_NB_PACKET_PER_LINE];               // Pointer to the fragmented red image data
+    uint8_t imageData_G[CIS_PIXELS_NB / UDP_NB_PACKET_PER_LINE];               // Pointer to the fragmented green image data
+    uint8_t imageData_B[CIS_PIXELS_NB / UDP_NB_PACKET_PER_LINE];               // Pointer to the fragmented blue image data
 };
 
 // Structure for packets containing button state information
@@ -92,10 +84,10 @@ struct packet_HID {
 struct packet_IMU {
     uint8_t type;                         // Identifies the data type
     uint32_t packet_id;                   // Sequence number, useful for ordering packets
-    int16_t acc[3];                       // Accelerometer data: x, y, and z axis
-    int16_t gyro[3];                      // Gyroscope data: x, y, and z axis
-    int16_t integrated_acc[3];            // Accelerometer data: x, y, and z axis
-    int16_t integrated_gyro[3];           // Gyroscope data: x, y, and z axis
+    float_t acc[3];                       // Accelerometer data: x, y, and z axis
+    float_t gyro[3];                      // Gyroscope data: x, y, and z axis
+    float_t integrated_acc[3];            // Accelerometer data: x, y, and z axis
+    float_t integrated_gyro[3];           // Gyroscope data: x, y, and z axis
 };
 
 typedef struct _cisReceive {    // defines our object's internal variables for each instance in a patch
@@ -106,13 +98,43 @@ typedef struct _cisReceive {    // defines our object's internal variables for e
 	t_systhread listener;		// thread
 	char* multicast;			// multicast address
 	int port;					// UDP reveiving port
+    
     bool line_complete;         // TRUE if receive complete ligne
-    void *outlet_R;
-    void *outlet_G;
-    void *outlet_B;
+    
+    void *outlet_Image;
+    void *outlet_LowImage;
+    void *outlet_IMU;
+    void *outlet_HID;
+    
     uint8_t* image_buffer_R;
     uint8_t* image_buffer_G;
     uint8_t* image_buffer_B;
+    t_atom *atom_buffer_R;
+    t_atom *atom_buffer_G;
+    t_atom *atom_buffer_B;
+    
+    float_t IMU_Ax;
+    float_t IMU_Ay;
+    float_t IMU_Az;
+    t_atom *atom_IMU_Ax;
+    t_atom *atom_IMU_Ay;
+    t_atom *atom_IMU_Az;
+    
+    float_t IMU_Gx;
+    float_t IMU_Gy;
+    float_t IMU_Gz;
+    t_atom *atom_IMU_Gx;
+    t_atom *atom_IMU_Gy;
+    t_atom *atom_IMU_Gz;
+    
+    uint8_t HID_B1;
+    uint8_t HID_B2;
+    uint8_t HID_B3;
+    t_atom *atom_HID_B1;
+    t_atom *atom_HID_B2;
+    t_atom *atom_HID_B3;
+    
+    t_clock *clock; // Ajout d'un clock pour gérer le timing
 } t_cisReceive;
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------------

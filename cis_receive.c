@@ -12,10 +12,29 @@
 
 #include "cis_receive.h"
 
+// Assurez-vous d'avoir des symboles globaux pour vos sélecteurs
+static t_symbol *s_LineLow_R;
+static t_symbol *s_LineLow_G;
+static t_symbol *s_LineLow_B;
+static t_symbol *s_Line_R;
+static t_symbol *s_Line_G;
+static t_symbol *s_Line_B;
+static t_symbol *s_IMU_Ax;
+static t_symbol *s_IMU_Ay;
+static t_symbol *s_IMU_Az;
+static t_symbol *s_IMU_Gx;
+static t_symbol *s_IMU_Gy;
+static t_symbol *s_IMU_Gz;
+static t_symbol *s_HID_B1;
+static t_symbol *s_HID_B2;
+static t_symbol *s_HID_B3;
+
 void cisReceive_readStartupInfo(t_cisReceive *x, void *data, uint16_t length);
 void cisReceive_readImageData(t_cisReceive *x, void *data, uint16_t length);
 void cisReceive_readImuData(t_cisReceive *x, void *data, uint16_t length);
 void cisReceive_readHidData(t_cisReceive *x, void *data, uint16_t length);
+void send_data_to_outlet(void* object, t_symbol* sel, int argc, t_atom* argv);
+void cisReceive_clock_tick(t_cisReceive *x);
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------------
 //  INSTANCE DECLARATION
@@ -54,33 +73,92 @@ void *cisReceive_new(t_symbol *s, long argc, t_atom *argv)
 		goto NOT_VALID;
 	}
     
+    x->clock = clock_new(x, (method)cisReceive_clock_tick);
+    clock_delay(x->clock, 1000); // Commence après un délai initial de 40 ms
+    
     // Initialiser le buffer d'image
     x->image_buffer_R = (uint8_t *)sysmem_newptr(CIS_PIXELS_NB);
     x->image_buffer_G = (uint8_t *)sysmem_newptr(CIS_PIXELS_NB);
     x->image_buffer_B = (uint8_t *)sysmem_newptr(CIS_PIXELS_NB);
     
-    if (!x->image_buffer_R) {
+    // Après avoir alloué les buffers
+    if (!x->image_buffer_R || !x->image_buffer_G || !x->image_buffer_B) {
         object_error((t_object*)x, "Erreur d'allocation pour image_buffer");
-        return NULL;
+        // Libération de mémoire ici si une allocation a réussi avant l'échec
+        if (x->image_buffer_R) sysmem_freeptr(x->image_buffer_R);
+        if (x->image_buffer_G) sysmem_freeptr(x->image_buffer_G);
+        if (x->image_buffer_B) sysmem_freeptr(x->image_buffer_B);
+        return NULL; // Retourne NULL pour indiquer l'échec de la création de l'objet
     }
     
-    if (!x->image_buffer_G) {
-        object_error((t_object*)x, "Erreur d'allocation pour image_buffer");
-        return NULL;
-    }
+    x->IMU_Ax = 0.0f;
+    x->IMU_Ay = 0.0f;
+    x->IMU_Az = 0.0f;
+    x->IMU_Gx = 0.0f;
+    x->IMU_Gy = 0.0f;
+    x->IMU_Gz = 0.0f;
     
-    if (!x->image_buffer_B) {
-        object_error((t_object*)x, "Erreur d'allocation pour image_buffer");
+    x->HID_B1 = 0;
+    x->HID_B2 = 0;
+    x->HID_B3 = 0;
+    
+    x->atom_buffer_R = (t_atom *)sysmem_newptr(CIS_PIXELS_NB * sizeof(t_atom));
+    x->atom_buffer_G = (t_atom *)sysmem_newptr(CIS_PIXELS_NB * sizeof(t_atom));
+    x->atom_buffer_B = (t_atom *)sysmem_newptr(CIS_PIXELS_NB * sizeof(t_atom));
+    
+    x->atom_IMU_Ax = (t_atom *)sysmem_newptr(1 * sizeof(t_atom));
+    x->atom_IMU_Ay = (t_atom *)sysmem_newptr(1 * sizeof(t_atom));
+    x->atom_IMU_Az = (t_atom *)sysmem_newptr(1 * sizeof(t_atom));
+    x->atom_IMU_Gx = (t_atom *)sysmem_newptr(1 * sizeof(t_atom));
+    x->atom_IMU_Gy = (t_atom *)sysmem_newptr(1 * sizeof(t_atom));
+    x->atom_IMU_Gz = (t_atom *)sysmem_newptr(1 * sizeof(t_atom));
+    x->atom_HID_B1 = (t_atom *)sysmem_newptr(1 * sizeof(t_atom));
+    x->atom_HID_B2 = (t_atom *)sysmem_newptr(1 * sizeof(t_atom));
+    x->atom_HID_B3 = (t_atom *)sysmem_newptr(1 * sizeof(t_atom));
+    
+    // Vérification de l'allocation réussie pour tous les buffers
+    if (!x->atom_buffer_R || !x->atom_buffer_G || !x->atom_buffer_B ||
+        !x->atom_IMU_Ax || !x->atom_IMU_Ay || !x->atom_IMU_Az ||
+        !x->atom_IMU_Gx || !x->atom_IMU_Gy || !x->atom_IMU_Gz ||
+        !x->atom_HID_B1 || !x->atom_HID_B2 || !x->atom_HID_B3) {
+        // Libération des ressources allouées
+        if (x->atom_buffer_R) sysmem_freeptr(x->atom_buffer_R);
+        if (x->atom_buffer_G) sysmem_freeptr(x->atom_buffer_G);
+        if (x->atom_buffer_B) sysmem_freeptr(x->atom_buffer_B);
+        // Continuez pour les autres allocations...
+        object_error((t_object*)x, "Erreur d'allocation pour atom_buffer");
         return NULL;
     }
+
+    s_LineLow_R = gensym("lineLow_R");
+    s_LineLow_G = gensym("lineLow_G");
+    s_LineLow_B = gensym("lineLow_B");
+    
+    s_Line_R = gensym("line_R");
+    s_Line_G = gensym("line_G");
+    s_Line_B = gensym("line_B");
+    
+    s_IMU_Ax = gensym("IMU_Ax");
+    s_IMU_Ay = gensym("IMU_Ay");
+    s_IMU_Az = gensym("IMU_Az");
+    
+    s_IMU_Gx = gensym("IMU_Gx");
+    s_IMU_Gy = gensym("IMU_Gy");
+    s_IMU_Gz = gensym("IMU_Gz");
+    
+    s_HID_B1 = gensym("HID_B1");
+    s_HID_B2 = gensym("HID_B2");
+    s_HID_B3 = gensym("HID_B3");
 
 	// HANDLE SOCKET INITIATION
 	if (syssock_set(x) < 0) goto NOT_VALID;
 	
 	// CREATE OUTLETS
-    x->outlet_R = outlet_new(x, NULL);
-    x->outlet_G = outlet_new(x, NULL);
-    x->outlet_B = outlet_new(x, NULL);
+    x->outlet_Image = outlet_new(x, NULL);
+    x->outlet_LowImage = outlet_new(x, NULL);
+    x->outlet_IMU = outlet_new(x, NULL);
+    x->outlet_HID = outlet_new(x, NULL);
+    
 	return(x);
 
 NOT_VALID:
@@ -90,26 +168,47 @@ NOT_VALID:
 
 void cisReceive_free(t_cisReceive *x)
 {
-	if (x->listener)
-	{
-		x->listening = false;
-		if (x->fd) {
-			syssock_dropmulticast(x->fd, x->multicast);
-			syssock_close(x->fd);
-		}
-		systhread_join(x->listener, NULL);
-		x->listener = NULL;
-	}
+    if (x->listener)
+    {
+        x->listening = false;
+        if (x->fd) {
+            syssock_dropmulticast(x->fd, x->multicast);
+            syssock_close(x->fd);
+            x->fd = 0; // S'assurer que le descripteur est réinitialisé
+        }
+        systhread_join(x->listener, NULL);
+        x->listener = NULL;
+    }
+    
     // Libérer le buffer d'image
     if (x->image_buffer_R) {
         sysmem_freeptr(x->image_buffer_R);
+        x->image_buffer_R = NULL; // Réinitialiser le pointeur après libération
     }
     if (x->image_buffer_G) {
         sysmem_freeptr(x->image_buffer_G);
+        x->image_buffer_G = NULL; // Réinitialiser le pointeur après libération
     }
     if (x->image_buffer_B) {
         sysmem_freeptr(x->image_buffer_B);
+        x->image_buffer_B = NULL; // Réinitialiser le pointeur après libération
     }
+
+    // Ajout pour libérer les buffers t_atom s'ils ont été alloués
+    if (x->atom_buffer_R) {
+        sysmem_freeptr(x->atom_buffer_R);
+        x->atom_buffer_R = NULL; // Réinitialiser le pointeur après libération
+    }
+    if (x->atom_buffer_G) {
+        sysmem_freeptr(x->atom_buffer_G);
+        x->atom_buffer_G = NULL; // Réinitialiser le pointeur après libération
+    }
+    if (x->atom_buffer_B) {
+        sysmem_freeptr(x->atom_buffer_B);
+        x->atom_buffer_B = NULL; // Réinitialiser le pointeur après libération
+    }
+
+    clock_free(x->clock);
 }
 
 void cisReceiveassist(t_cisReceive *x, void *b, long m, long a, char *s) {
@@ -135,7 +234,7 @@ void cisReceive_readImageData(t_cisReceive *x, void *data, uint16_t length) {
     static uint32_t offset = 0;
     static uint8_t color = 0;
     
-    if (length == sizeof(struct packet_Image)) {
+    if (length == sizeof(struct packet_Image)) { //448
         struct packet_Image *packet = (struct packet_Image *)data;
 
         if (curr_line_id != packet->line_id)
@@ -147,32 +246,17 @@ void cisReceive_readImageData(t_cisReceive *x, void *data, uint16_t length) {
         }
         
         offset = packet->fragment_id * packet->fragment_size;
-        color = packet->imageColor;
         
-        switch (color) {
-            case IMAGE_COLOR_R:
-                for (uint32_t i = 0; i < packet->fragment_size; i++) {
-                    x->image_buffer_R[offset + i] = packet->imageData[i];
-                }
-                received_fragments_R[packet->fragment_id] = TRUE;
-                break;
-            case IMAGE_COLOR_G:
-                for (uint32_t i = 0; i < packet->fragment_size; i++) {
-                    x->image_buffer_G[offset + i] = packet->imageData[i];
-                }
-                received_fragments_G[packet->fragment_id] = TRUE;
-                break;
-            case IMAGE_COLOR_B:
-                for (uint32_t i = 0; i < packet->fragment_size; i++) {
-                    x->image_buffer_B[offset + i] = packet->imageData[i];
-                }
-                received_fragments_B[packet->fragment_id] = TRUE;
-                break;
-            default:
-                // error managment
-                return;
+        for (uint32_t i = 0; i < packet->fragment_size; i++) {
+            x->image_buffer_R[offset + i] = packet->imageData_R[i];
+            x->image_buffer_G[offset + i] = packet->imageData_G[i];
+            x->image_buffer_B[offset + i] = packet->imageData_B[i];
         }
         
+        received_fragments_R[packet->fragment_id] = TRUE;
+        received_fragments_G[packet->fragment_id] = TRUE;
+        received_fragments_B[packet->fragment_id] = TRUE;
+
         x->line_complete = TRUE; // Commencez par supposer que la ligne est complète
 
         for (int i = 0; i < packet->total_fragments; i++) {
@@ -191,13 +275,21 @@ void cisReceive_readImuData(t_cisReceive *x, void *data, uint16_t length) {
         
         //post("ID: %d", packet->packet_id);
         
-        //post("acc X: %d", packet->acc[0]);
-        //post("acc Y: %d", packet->acc[1]);
-        //post("acc Z: %d", packet->acc[2]);
+        //post("acc X: %f", packet->acc[0]);
+        //post("acc Y: %f", packet->acc[1]);
+        //post("acc Z: %f", packet->acc[2]);
         
-        //post("gyro X: %d", packet->gyro[0]);
-        //post("gyro Y: %d", packet->gyro[1]);
-        //post("gyro Z: %d", packet->gyro[2]);
+        //post("gyro X: %f", packet->gyro[0]);
+        //post("gyro Y: %f", packet->gyro[1]);
+        //post("gyro Z: %f", packet->gyro[2]);
+        
+        x->IMU_Ax = packet->acc[0];
+        x->IMU_Ay = packet->acc[1];
+        x->IMU_Az = packet->acc[2];
+        
+        x->IMU_Gx = packet->gyro[0];
+        x->IMU_Gy = packet->gyro[1];
+        x->IMU_Gz = packet->gyro[2];
     }
 }
 
@@ -206,147 +298,147 @@ void cisReceive_readHidData(t_cisReceive *x, void *data, uint16_t length) {
 }
     
 void cisReceive_read(t_cisReceive *x) {
-#ifndef RGBA_BUFFER
-    uint8_t msgbuf[UDP_PACKET_SIZE];
+    uint8_t msgbuf[sizeof(struct packet_Image)];
     uint32_t nbytes;
     socklen_t addrlen = sizeof(x->addr);
 
     while (x->listening) {
-        nbytes = (uint32_t)recvfrom(x->fd, msgbuf, UDP_PACKET_SIZE, 0, (struct sockaddr *) &x->addr, &addrlen);
-        //nbytes = (uint32_t)recvfrom(x->fd, msgbuf, sizeof(struct packet_Image), 0, (struct sockaddr *) &x->addr, &addrlen);
+        nbytes = (uint32_t)recvfrom(x->fd, msgbuf, sizeof(struct packet_Image), 0, (struct sockaddr *) &x->addr, &addrlen);
 
-        switch (msgbuf[0]) {
-            case STARTUP_INFO_HEADER:
-                cisReceive_readStartupInfo(x, msgbuf, nbytes);
-                break;
-            case IMAGE_DATA_HEADER:
-                cisReceive_readImageData(x, msgbuf, nbytes);
-                break;
-            case IMU_DATA_HEADER:
-                cisReceive_readImuData(x, msgbuf, nbytes);
-                break;
-            case HID_DATA_HEADER:
-                cisReceive_readHidData(x, msgbuf, nbytes);
-                break;
-            default:
-                // error managment
-                return;
+        if (nbytes < 0) {
+            // Gestion des erreurs pour recvfrom
+            object_error((t_object*)x, "Erreur lors de la réception des données : %d", errno);
+            return; // Poursuivre avec la boucle pourrait être une option, ou vous pourriez choisir de sortir selon votre cas d'utilisation
         }
         
-        if (x->line_complete == TRUE) { //une ligne complète est reçue
-            //post("start line sending"); // Afficher le nombre de pixels
-            x->line_complete = FALSE;
-            
-            // UDP_NB_PACKET_PER_LINE * UDP_PACKET_SIZE donne la taille totale du buffer en octets
-            static int size = CIS_PIXELS_NB;
-            
-            // Créer un tableau de t_atom de la taille appropriée
-            t_atom *atom_buffer_R = (t_atom *)sysmem_newptr(size * sizeof(t_atom));
-            t_atom *atom_buffer_G = (t_atom *)sysmem_newptr(size * sizeof(t_atom));
-            t_atom *atom_buffer_B = (t_atom *)sysmem_newptr(size * sizeof(t_atom));
-            
-            // Remplir le tableau de t_atom avec les données de votre buffer
-            for(int i = 0; i < size; i++) {
-                atom_setlong(atom_buffer_R + i, (long)x->image_buffer_R[i]);
-                atom_setlong(atom_buffer_G + i, (long)x->image_buffer_G[i]);
-                atom_setlong(atom_buffer_B + i, (long)x->image_buffer_B[i]);
+        switch (msgbuf[0]) {
+            case STARTUP_INFO_HEADER:
+                if (nbytes >= sizeof(struct packet_StartupInfo)) {
+                    cisReceive_readStartupInfo(x, msgbuf, nbytes);
+                } else {
+                    object_error((t_object*)x, "Paquet STARTUP_INFO_HEADER malformé.");
+                }
+                break;
+            case IMAGE_DATA_HEADER:
+                if (nbytes >= sizeof(struct packet_Image)) {
+                    cisReceive_readImageData(x, msgbuf, nbytes);
+                } else {
+                    object_error((t_object*)x, "Paquet IMAGE_DATA_HEADER malformé.");
+                }
+                break;
+            case IMU_DATA_HEADER:
+                if (nbytes >= sizeof(struct packet_IMU)) {
+                    cisReceive_readImuData(x, msgbuf, nbytes);
+                    atom_setlong(x->atom_IMU_Ax, (long)x->IMU_Ax);
+                    atom_setlong(x->atom_IMU_Ay, (long)x->IMU_Ay);
+                    atom_setlong(x->atom_IMU_Az, (long)x->IMU_Az);
+                    atom_setlong(x->atom_IMU_Gx, (long)x->IMU_Gx);
+                    atom_setlong(x->atom_IMU_Gy, (long)x->IMU_Gy);
+                    atom_setlong(x->atom_IMU_Gz, (long)x->IMU_Gz);
+                    send_data_to_outlet(x, s_IMU_Ax, 1, x->atom_IMU_Ax);
+                    send_data_to_outlet(x, s_IMU_Ay, 1, x->atom_IMU_Ay);
+                    send_data_to_outlet(x, s_IMU_Az, 1, x->atom_IMU_Az);
+                    send_data_to_outlet(x, s_IMU_Gx, 1, x->atom_IMU_Gx);
+                    send_data_to_outlet(x, s_IMU_Gy, 1, x->atom_IMU_Gy);
+                    send_data_to_outlet(x, s_IMU_Gz, 1, x->atom_IMU_Gz);
+                } else {
+                    object_error((t_object*)x, "Paquet IMU_DATA_HEADER malformé.");
+                }
+                break;
+            case HID_DATA_HEADER:
+                if (nbytes >= sizeof(struct packet_HID)) {
+                    cisReceive_readHidData(x, msgbuf, nbytes);
+                    atom_setlong(x->atom_HID_B1, (long)x->HID_B1);
+                    atom_setlong(x->atom_HID_B2, (long)x->HID_B2);
+                    atom_setlong(x->atom_HID_B3, (long)x->HID_B3);
+                    send_data_to_outlet(x, s_HID_B1, 1, x->atom_HID_B1);
+                    send_data_to_outlet(x, s_HID_B2, 1, x->atom_HID_B2);
+                    send_data_to_outlet(x, s_HID_B3, 1, x->atom_HID_B3);
+                } else {
+                    object_error((t_object*)x, "Paquet HID_DATA_HEADER malformé.");
+                }
+                break;
+            default:
+                object_error((t_object*)x, "En-tête de paquet inconnu.");
+                return;
+        }
+
+        if (x->line_complete == TRUE) {
+            for (int i = 0; i < CIS_PIXELS_NB; i++) {
+                atom_setlong(&(x->atom_buffer_R[i]), (long)x->image_buffer_R[i]);
+                atom_setlong(&(x->atom_buffer_G[i]), (long)x->image_buffer_G[i]);
+                atom_setlong(&(x->atom_buffer_B[i]), (long)x->image_buffer_B[i]);
             }
             
             // Envoyer la liste d'atoms
-            outlet_list(x->outlet_R, NULL, size, atom_buffer_R);
-            outlet_list(x->outlet_G, NULL, size, atom_buffer_G);
-            outlet_list(x->outlet_B, NULL, size, atom_buffer_B);
-            
-            // Libérer la mémoire allouée pour le tableau de t_atom
-            sysmem_freeptr(atom_buffer_R);
-            sysmem_freeptr(atom_buffer_G);
-            sysmem_freeptr(atom_buffer_B);
+            send_data_to_outlet(x, s_Line_R, CIS_PIXELS_NB, x->atom_buffer_R);
+            send_data_to_outlet(x, s_Line_G, CIS_PIXELS_NB, x->atom_buffer_G);
+            send_data_to_outlet(x, s_Line_B, CIS_PIXELS_NB, x->atom_buffer_B);
         }
     }
-        
-#else
-    uint8_t msgbuf[UDP_PACKET_SIZE];
-    uint32_t nbytes;
-    socklen_t addrlen = sizeof(x->addr);
+}
 
-    while (x->listening) {
-        nbytes = (uint32_t)recvfrom(x->fd, msgbuf, UDP_PACKET_SIZE, 0, (struct sockaddr *) &x->addr, &addrlen);
-        uint32_t header = *((uint32_t *)msgbuf);
+void cisReceive_clock_tick(t_cisReceive *x) {
+    defer_low(x, (method)send_data_to_outlet, s_LineLow_R, CIS_PIXELS_NB, x->atom_buffer_R);
+    defer_low(x, (method)send_data_to_outlet, s_LineLow_G, CIS_PIXELS_NB, x->atom_buffer_G);
+    defer_low(x, (method)send_data_to_outlet, s_LineLow_B, CIS_PIXELS_NB, x->atom_buffer_B);
+
+    // Planifier le prochain tick pour dans 10 ms
+    clock_delay(x->clock, 10);
+}
+
+void send_data_to_outlet(void* object, t_symbol* sel, int argc, t_atom* argv) {
+    t_cisReceive *x = (t_cisReceive *)object;
     
-        if (nbytes == UDP_PACKET_SIZE) {
-            //post("cisReceive data length: %d", nbytes); // Afficher la longueur des données
-            
-            // Extraction de l'en-tête
-            uint32_t header = *((uint32_t *)msgbuf);
-            //post("header: %d", header); // Afficher le numéro de packet
-
-            // Calculer le nombre de pixels à traiter
-            uint32_t numPixels = (nbytes - sizeof(int32_t)) / sizeof(int32_t);
-            //post("pixels number: %d", numPixels); // Afficher le nombre de pixels
-
-            // Traitement des données (conversion de RGBA à ARGB)
-            for (uint32_t i = 0; i < numPixels; i++) {
-                // Extraction du pixel en format RGBA
-                uint32_t rgba_pixel = *(uint32_t *)(msgbuf + ((UDP_HEADER_SIZE * sizeof(int32_t)) + (i * sizeof(uint32_t))));
-                //post("rgba_pixel:%08X",rgba_pixel);
-
-                // Extraction des composants individuels
-                uint8_t alpha = (rgba_pixel >> 24) & 0xFF; // Extract red
-                uint8_t blue = (rgba_pixel >> 16) & 0xFF; // Extract green
-                uint8_t green = (rgba_pixel >> 8) & 0xFF; // Extract blue
-                uint8_t red = rgba_pixel & 0xFF; // Extract alpha
-                
-                // Enregistrer les valeurs de canal dans le buffer d'image
-                x->image_buffer_R[header + i] = red;
-                x->image_buffer_G[header + i] = green;
-                x->image_buffer_B[header + i] = blue;
-                
-                //post("Pixel:%d A:%d R:%d G:%d B:%d", i, alpha, red, green, blue);
-            }
-            
-            if (header == (CIS_PIXELS_NB - (CIS_PIXELS_NB / UDP_NB_PACKET_PER_LINE))) { // header à 1440, une ligne complète est reçue
-                post("start line sending"); // Afficher le nombre de pixels
-                
-                // UDP_NB_PACKET_PER_LINE * UDP_PACKET_SIZE donne la taille totale du buffer en octets
-                int size = CIS_PIXELS_NB;
-
-                // Créer un tableau de t_atom de la taille appropriée
-                t_atom *atom_buffer_R = (t_atom *)sysmem_newptr(size * sizeof(t_atom));
-                t_atom *atom_buffer_G = (t_atom *)sysmem_newptr(size * sizeof(t_atom));
-                t_atom *atom_buffer_B = (t_atom *)sysmem_newptr(size * sizeof(t_atom));
-
-                // Remplir le tableau de t_atom avec les données de votre buffer
-                for(int i = 0; i < size; i++) {
-                    atom_setlong(atom_buffer_R + i, (long)x->image_buffer_R[i]);
-                    atom_setlong(atom_buffer_G + i, (long)x->image_buffer_G[i]);
-                    atom_setlong(atom_buffer_B + i, (long)x->image_buffer_B[i]);
-                }
-
-                // Envoyer la liste d'atoms
-                outlet_list(x->outlet_R, NULL, size, atom_buffer_R);
-                outlet_list(x->outlet_G, NULL, size, atom_buffer_G);
-                outlet_list(x->outlet_B, NULL, size, atom_buffer_B);
-
-                // Libérer la mémoire allouée pour le tableau de t_atom
-                sysmem_freeptr(atom_buffer_R);
-                sysmem_freeptr(atom_buffer_G);
-                sysmem_freeptr(atom_buffer_B);
-
-#if(0)
-                for (uint32_t i = 0; i < CIS_PIXELS_NB; i++) {
-                    post("Pixel:%d A:%d R:%d G:%d B:%d", i,
-                                                            x->image_buffer[i * sizeof(int32_t)],
-                                                            x->image_buffer[(i * sizeof(int32_t)) + 1],
-                                                            x->image_buffer[(i * sizeof(int32_t)) + 2],
-                                                            x->image_buffer[(i * sizeof(int32_t)) + 3]);
-                }
-#endif
-            }
-        } else {
-            post("Data length is too short, ignoring");
-        }
+    if(sel == s_LineLow_R) {
+        outlet_anything(x->outlet_LowImage, s_LineLow_R, argc, argv);
     }
-#endif
+    if(sel == s_LineLow_G) {
+        outlet_anything(x->outlet_LowImage, s_LineLow_G, argc, argv);
+    }
+    if(sel == s_LineLow_B) {
+        outlet_anything(x->outlet_LowImage, s_LineLow_B, argc, argv);
+    }
+
+    if(sel == s_Line_R) {
+        outlet_anything(x->outlet_Image, s_Line_R, argc, argv);
+    }
+    if(sel == s_Line_G) {
+        outlet_anything(x->outlet_Image, s_Line_G, argc, argv);
+    }
+    if(sel == s_Line_B) {
+        outlet_anything(x->outlet_Image, s_Line_B, argc, argv);
+    }
+
+    if(sel == s_IMU_Ax) {
+        outlet_anything(x->outlet_IMU, s_IMU_Ax, argc, argv);
+    }
+    if(sel == s_IMU_Ay) {
+        outlet_anything(x->outlet_IMU, s_IMU_Ay, argc, argv);
+    }
+    if(sel == s_IMU_Az) {
+        outlet_anything(x->outlet_IMU, s_IMU_Az, argc, argv);
+    }
+    
+    if(sel == s_IMU_Gx) {
+        outlet_anything(x->outlet_IMU, s_IMU_Gx, argc, argv);
+    }
+    if(sel == s_IMU_Gy) {
+        outlet_anything(x->outlet_IMU, s_IMU_Gy, argc, argv);
+    }
+    if(sel == s_IMU_Gz) {
+        outlet_anything(x->outlet_IMU, s_IMU_Gz, argc, argv);
+    }
+
+    if(sel == s_HID_B1) {
+        outlet_anything(x->outlet_HID, s_HID_B1, argc, argv);
+    }
+    if(sel == s_HID_B2) {
+        outlet_anything(x->outlet_HID, s_HID_B2, argc, argv);
+    }
+    if(sel == s_HID_B3) {
+        outlet_anything(x->outlet_HID, s_HID_B3, argc, argv);
+    }
 }
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------------
