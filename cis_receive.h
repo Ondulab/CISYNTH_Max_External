@@ -7,6 +7,7 @@
 
 #ifdef WIN_VERSION
 #define MAXAPI_USE_MSCRT
+#include "stdint.h"
 #endif
 
 #ifndef CIS_RECEIVE
