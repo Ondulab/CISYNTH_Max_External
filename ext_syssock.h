@@ -15,6 +15,8 @@
 #ifndef _WINDOWS_
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
 #undef WIN32_LEAN_AND_MEAN
 #endif
 

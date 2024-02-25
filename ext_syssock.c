@@ -1,5 +1,17 @@
 #include "ext_syssock.h"
+
+#ifdef WIN_VERSION
+#include <winsock2.h>
+#include <ws2tcpip.h>
+// N'oubliez pas de lier avec Ws2_32.lib
+#pragma comment(lib, "Ws2_32.lib")
+#else
+#include <sys/socket.h>
+#include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#endif
 
 void (*syssock_signal(int signo, void (*func)(int)))(int);
 
