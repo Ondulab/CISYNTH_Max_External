@@ -329,12 +329,12 @@ void cisReceive_read(t_cisReceive *x) {
             case IMU_DATA_HEADER:
                 if (nbytes >= sizeof(struct packet_IMU)) {
                     cisReceive_readImuData(x, msgbuf, nbytes);
-                    atom_setlong(x->atom_IMU_Ax, (long)x->IMU_Ax);
-                    atom_setlong(x->atom_IMU_Ay, (long)x->IMU_Ay);
-                    atom_setlong(x->atom_IMU_Az, (long)x->IMU_Az);
-                    atom_setlong(x->atom_IMU_Gx, (long)x->IMU_Gx);
-                    atom_setlong(x->atom_IMU_Gy, (long)x->IMU_Gy);
-                    atom_setlong(x->atom_IMU_Gz, (long)x->IMU_Gz);
+                    atom_setfloat(x->atom_IMU_Ax, x->IMU_Ax);
+                    atom_setfloat(x->atom_IMU_Ay, x->IMU_Ay);
+                    atom_setfloat(x->atom_IMU_Az, x->IMU_Az);
+                    atom_setfloat(x->atom_IMU_Gx, x->IMU_Gx);
+                    atom_setfloat(x->atom_IMU_Gy, x->IMU_Gy);
+                    atom_setfloat(x->atom_IMU_Gz, x->IMU_Gz);
                     send_data_to_outlet(x, s_IMU_Ax, 1, x->atom_IMU_Ax);
                     send_data_to_outlet(x, s_IMU_Ay, 1, x->atom_IMU_Ay);
                     send_data_to_outlet(x, s_IMU_Az, 1, x->atom_IMU_Az);
