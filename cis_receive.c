@@ -1,18 +1,18 @@
 /*
-	udpReceive.c - receive data from Ondulab CIS devices
+    udpReceive.c - receive data from Ondulab CIS devices
 
-	this object has one inlet and one outlet
-	it decodes formatted image lines from CIS in udp
-	it send to MAX outlet ARGB array
+    this object has one inlet and one outlet
+    it decodes formatted image lines from CIS in udp
+    it sends to MAX outlet ARGB array
 
-	https://github.com/CNMAT/CNMAT-Externs source code is a great source of inspiration
+    https://github.com/CNMAT/CNMAT-Externs source code is a great source of inspiration
     https://github.com/siteswapjuggler/smartball-externals source code of inspiration
     https://github.com/Ondulab/SSS_CIS source code of CIS device
 */
 
 #include "cis_receive.h"
 
-// Assurez-vous d'avoir des symboles globaux pour vos sélecteurs
+// Ensure that you have global symbols for your selectors
 static t_symbol *s_LineLow_R;
 static t_symbol *s_LineLow_G;
 static t_symbol *s_LineLow_B;
@@ -40,15 +40,15 @@ void cisReceive_clock_tick(t_cisReceive *x);
 //  INSTANCE DECLARATION
 //---------------------------------------------------------------------------------------------------------------------------------------------------------
 
-t_class *cisReceiveclass;		// global pointer to the object class - so max can reference the object
+t_class *cisReceiveclass;        // global pointer to the object class - so max can reference the object
 
 void ext_main(void *r)
 {
-	t_class *c;																											// pointer to a class type
-	c = class_new("cis_receive", (method)cisReceive_new, (method)cisReceive_free, sizeof(t_cisReceive), 0L, A_GIMME, 0); 	// class_new() loads our external's class into Max's memory so it can be used in a patch
-	class_register(CLASS_BOX, c);																						// register to CLASS_BOX type for max environment
-	cisReceiveclass = c;
-	post("cis_receive v0.06 - 31.12.2023");
+    t_class *c;                                                                                                            // pointer to a class type
+    c = class_new("cis_receive", (method)cisReceive_new, (method)cisReceive_free, sizeof(t_cisReceive), 0L, A_GIMME, 0);     // class_new() loads our external's class into Max's memory so it can be used in a patch
+    class_register(CLASS_BOX, c);                                                                                        // register to CLASS_BOX type for max environment
+    cisReceiveclass = c;
+    post("cis_receive v0.06 - 31.12.2023");
 }
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -57,38 +57,38 @@ void ext_main(void *r)
 
 void *cisReceive_new(t_symbol *s, long argc, t_atom *argv)
 {
-	t_cisReceive *x = (t_cisReceive *)object_alloc(cisReceiveclass);
+    t_cisReceive *x = (t_cisReceive *)object_alloc(cisReceiveclass);
 
     post("new udpReceive");
     
-	// HANDLE ARGUMENTS
-	if (argc == 0) {
-		x->port = DEFAULT_PORT;
-		x->multicast = DEFAULT_MULTI;
-        post("Defaut port :%d", DEFAULT_PORT);
-	}
-	else {
-	ARG_FAULT:
-		object_error((t_object*)x, "Cannot start with those arguments ");
-		goto NOT_VALID;
-	}
+    // HANDLE ARGUMENTS
+    if (argc == 0) {
+        x->port = DEFAULT_PORT;
+        x->multicast = DEFAULT_MULTI;
+        post("Default port: %d", DEFAULT_PORT);
+    }
+    else {
+    ARG_FAULT:
+        object_error((t_object*)x, "Cannot start with those arguments ");
+        goto NOT_VALID;
+    }
     
     x->clock = clock_new(x, (method)cisReceive_clock_tick);
-    clock_delay(x->clock, 1000); // Commence après un délai initial de 40 ms
+    clock_delay(x->clock, 1000); // Starts after an initial delay of 40 ms
     
-    // Initialiser le buffer d'image
+    // Initialize the image buffer
     x->image_buffer_R = (uint8_t *)sysmem_newptr(CIS_PIXELS_NB);
     x->image_buffer_G = (uint8_t *)sysmem_newptr(CIS_PIXELS_NB);
     x->image_buffer_B = (uint8_t *)sysmem_newptr(CIS_PIXELS_NB);
     
-    // Après avoir alloué les buffers
+    // After allocating the buffers
     if (!x->image_buffer_R || !x->image_buffer_G || !x->image_buffer_B) {
-        object_error((t_object*)x, "Erreur d'allocation pour image_buffer");
-        // Libération de mémoire ici si une allocation a réussi avant l'échec
+        object_error((t_object*)x, "Allocation error for image_buffer");
+        // Free memory here if any allocation succeeded before failure
         if (x->image_buffer_R) sysmem_freeptr(x->image_buffer_R);
         if (x->image_buffer_G) sysmem_freeptr(x->image_buffer_G);
         if (x->image_buffer_B) sysmem_freeptr(x->image_buffer_B);
-        return NULL; // Retourne NULL pour indiquer l'échec de la création de l'objet
+        return NULL; // Return NULL to indicate object creation failure
     }
     
     x->IMU_Ax = 0.0f;
@@ -116,17 +116,17 @@ void *cisReceive_new(t_symbol *s, long argc, t_atom *argv)
     x->atom_HID_B2 = (t_atom *)sysmem_newptr(1 * sizeof(t_atom));
     x->atom_HID_B3 = (t_atom *)sysmem_newptr(1 * sizeof(t_atom));
     
-    // Vérification de l'allocation réussie pour tous les buffers
+    // Check for successful allocation of all buffers
     if (!x->atom_buffer_R || !x->atom_buffer_G || !x->atom_buffer_B ||
         !x->atom_IMU_Ax || !x->atom_IMU_Ay || !x->atom_IMU_Az ||
         !x->atom_IMU_Gx || !x->atom_IMU_Gy || !x->atom_IMU_Gz ||
         !x->atom_HID_B1 || !x->atom_HID_B2 || !x->atom_HID_B3) {
-        // Libération des ressources allouées
+        // Free allocated resources
         if (x->atom_buffer_R) sysmem_freeptr(x->atom_buffer_R);
         if (x->atom_buffer_G) sysmem_freeptr(x->atom_buffer_G);
         if (x->atom_buffer_B) sysmem_freeptr(x->atom_buffer_B);
-        // Continuez pour les autres allocations...
-        object_error((t_object*)x, "Erreur d'allocation pour atom_buffer");
+        // Continue for other allocations...
+        object_error((t_object*)x, "Allocation error for atom_buffer");
         return NULL;
     }
 
@@ -150,20 +150,20 @@ void *cisReceive_new(t_symbol *s, long argc, t_atom *argv)
     s_HID_B2 = gensym("HID_B2");
     s_HID_B3 = gensym("HID_B3");
 
-	// HANDLE SOCKET INITIATION
-	if (syssock_set(x) < 0) goto NOT_VALID;
-	
-	// CREATE OUTLETS
+    // HANDLE SOCKET INITIATION
+    if (syssock_set(x) < 0) goto NOT_VALID;
+    
+    // CREATE OUTLETS
     x->outlet_Image = outlet_new(x, NULL);
     x->outlet_LowImage = outlet_new(x, NULL);
     x->outlet_IMU = outlet_new(x, NULL);
     x->outlet_HID = outlet_new(x, NULL);
     
-	return(x);
+    return(x);
 
 NOT_VALID:
-	x = NULL;
-	return(x);
+    x = NULL;
+    return(x);
 }
 
 void cisReceive_free(t_cisReceive *x)
@@ -174,48 +174,48 @@ void cisReceive_free(t_cisReceive *x)
         if (x->fd) {
             syssock_dropmulticast(x->fd, x->multicast);
             syssock_close(x->fd);
-            x->fd = 0; // S'assurer que le descripteur est réinitialisé
+            x->fd = 0; // Ensure the descriptor is reset
         }
         systhread_join(x->listener, NULL);
         x->listener = NULL;
     }
     
-    // Libérer le buffer d'image
+    // Free the image buffer
     if (x->image_buffer_R) {
         sysmem_freeptr(x->image_buffer_R);
-        x->image_buffer_R = NULL; // Réinitialiser le pointeur après libération
+        x->image_buffer_R = NULL; // Reset the pointer after freeing
     }
     if (x->image_buffer_G) {
         sysmem_freeptr(x->image_buffer_G);
-        x->image_buffer_G = NULL; // Réinitialiser le pointeur après libération
+        x->image_buffer_G = NULL; // Reset the pointer after freeing
     }
     if (x->image_buffer_B) {
         sysmem_freeptr(x->image_buffer_B);
-        x->image_buffer_B = NULL; // Réinitialiser le pointeur après libération
+        x->image_buffer_B = NULL; // Reset the pointer after freeing
     }
 
-    // Ajout pour libérer les buffers t_atom s'ils ont été alloués
+    // Added to free the t_atom buffers if they were allocated
     if (x->atom_buffer_R) {
         sysmem_freeptr(x->atom_buffer_R);
-        x->atom_buffer_R = NULL; // Réinitialiser le pointeur après libération
+        x->atom_buffer_R = NULL; // Reset the pointer after freeing
     }
     if (x->atom_buffer_G) {
         sysmem_freeptr(x->atom_buffer_G);
-        x->atom_buffer_G = NULL; // Réinitialiser le pointeur après libération
+        x->atom_buffer_G = NULL; // Reset the pointer after freeing
     }
     if (x->atom_buffer_B) {
         sysmem_freeptr(x->atom_buffer_B);
-        x->atom_buffer_B = NULL; // Réinitialiser le pointeur après libération
+        x->atom_buffer_B = NULL; // Reset the pointer after freeing
     }
 
     clock_free(x->clock);
 }
 
 void cisReceiveassist(t_cisReceive *x, void *b, long m, long a, char *s) {
-	if (m == ASSIST_INLET)
-		;
-	else 
-		sprintf(s, "Smartball feedbacks");
+    if (m == ASSIST_INLET)
+        ;
+    else
+        sprintf(s, "Smartball feedbacks");
 }
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -223,12 +223,24 @@ void cisReceiveassist(t_cisReceive *x, void *b, long m, long a, char *s) {
 //---------------------------------------------------------------------------------------------------------------------------------------------------------
 
 void cisReceive_readStartupInfo(t_cisReceive *x, void *data, uint16_t length) {
-    
+    if (length == sizeof(struct packet_StartupInfo)) {
+        struct packet_StartupInfo *packet = (struct packet_StartupInfo *)data;
+
+        // Store packet ID and version info in x structure
+        x->startup_packet_id = packet->packet_id;
+        strncpy(x->version_info, (const char *)packet->version_info, sizeof(x->version_info) - 1);
+        x->version_info[sizeof(x->version_info) - 1] = '\0'; // Ensure it's a valid string
+
+        // Post a message or perform other actions based on the startup info received
+        post("Startup Packet ID: %u, Version Info: %s", packet->packet_id, x->version_info);
+    } else {
+        object_error((t_object*)x, "Invalid Startup Info packet length.");
+    }
 }
 
 void cisReceive_readImageData(t_cisReceive *x, void *data, uint16_t length) {
     static uint32_t curr_line_id = 0;
-    static bool received_fragments_R[UDP_NB_PACKET_PER_LINE] = {0}; //todo rendre intelligent en récuperant
+    static bool received_fragments_R[UDP_NB_PACKET_PER_LINE] = {0}; //todo make smart
     static bool received_fragments_G[UDP_NB_PACKET_PER_LINE] = {0};
     static bool received_fragments_B[UDP_NB_PACKET_PER_LINE] = {0};
     static uint32_t offset = 0;
@@ -257,12 +269,12 @@ void cisReceive_readImageData(t_cisReceive *x, void *data, uint16_t length) {
         received_fragments_G[packet->fragment_id] = TRUE;
         received_fragments_B[packet->fragment_id] = TRUE;
 
-        x->line_complete = TRUE; // Commencez par supposer que la ligne est complète
+        x->line_complete = TRUE; // Start by assuming the line is complete
 
         for (int i = 0; i < packet->total_fragments; i++) {
             if (!received_fragments_R[i] || !received_fragments_G[i] || !received_fragments_B[i]) {
-                x->line_complete = FALSE; // Dès qu'un fragment manquant est trouvé, marquez la ligne comme incomplète
-                break; // Pas besoin de vérifier les autres fragments
+                x->line_complete = FALSE; // As soon as a missing fragment is found, mark the line as incomplete
+                break; // No need to check other fragments
             }
         }
     }
@@ -294,7 +306,21 @@ void cisReceive_readImuData(t_cisReceive *x, void *data, uint16_t length) {
 }
 
 void cisReceive_readHidData(t_cisReceive *x, void *data, uint16_t length) {
-    
+    if (length == sizeof(struct packet_HID)) {
+        struct packet_HID *packet = (struct packet_HID *)data;
+
+        // Update button states in x structure
+        x->HID_B1 = packet->button_A;
+        x->HID_B2 = packet->button_B;
+        x->HID_B3 = packet->button_C;
+
+        // Post button states or trigger actions
+        //post("HID Packet ID: %u, Button A: %u, Button B: %u, Button C: %u", packet->packet_id, packet->button_A, packet->button_B, packet->button_C);
+
+        // Update atoms for sending to outlets (already implemented in cisReceive_read function)
+    } else {
+        object_error((t_object*)x, "Invalid HID Data packet length.");
+    }
 }
     
 void cisReceive_read(t_cisReceive *x) {
@@ -306,9 +332,9 @@ void cisReceive_read(t_cisReceive *x) {
         nbytes = (uint32_t)recvfrom(x->fd, msgbuf, sizeof(struct packet_Image), 0, (struct sockaddr *) &x->addr, &addrlen);
 
         if (nbytes < 0) {
-            // Gestion des erreurs pour recvfrom
-            object_error((t_object*)x, "Erreur lors de la réception des données : %d", errno);
-            return; // Poursuivre avec la boucle pourrait être une option, ou vous pourriez choisir de sortir selon votre cas d'utilisation
+            // Error handling for recvfrom
+            object_error((t_object*)x, "Error receiving data: %d", errno);
+            return; // Continuing with the loop might be an option, or you could choose to exit depending on your use case
         }
         
         switch (msgbuf[0]) {
@@ -316,14 +342,14 @@ void cisReceive_read(t_cisReceive *x) {
                 if (nbytes >= sizeof(struct packet_StartupInfo)) {
                     cisReceive_readStartupInfo(x, msgbuf, nbytes);
                 } else {
-                    object_error((t_object*)x, "Paquet STARTUP_INFO_HEADER malformé.");
+                    object_error((t_object*)x, "Malformed STARTUP_INFO_HEADER packet.");
                 }
                 break;
             case IMAGE_DATA_HEADER:
                 if (nbytes >= sizeof(struct packet_Image)) {
                     cisReceive_readImageData(x, msgbuf, nbytes);
                 } else {
-                    object_error((t_object*)x, "Paquet IMAGE_DATA_HEADER malformé.");
+                    object_error((t_object*)x, "Malformed IMAGE_DATA_HEADER packet.");
                 }
                 break;
             case IMU_DATA_HEADER:
@@ -342,7 +368,7 @@ void cisReceive_read(t_cisReceive *x) {
                     send_data_to_outlet(x, s_IMU_Gy, 1, x->atom_IMU_Gy);
                     send_data_to_outlet(x, s_IMU_Gz, 1, x->atom_IMU_Gz);
                 } else {
-                    object_error((t_object*)x, "Paquet IMU_DATA_HEADER malformé.");
+                    object_error((t_object*)x, "Malformed IMU_DATA_HEADER packet.");
                 }
                 break;
             case HID_DATA_HEADER:
@@ -355,11 +381,11 @@ void cisReceive_read(t_cisReceive *x) {
                     send_data_to_outlet(x, s_HID_B2, 1, x->atom_HID_B2);
                     send_data_to_outlet(x, s_HID_B3, 1, x->atom_HID_B3);
                 } else {
-                    object_error((t_object*)x, "Paquet HID_DATA_HEADER malformé.");
+                    object_error((t_object*)x, "Malformed HID_DATA_HEADER packet.");
                 }
                 break;
             default:
-                object_error((t_object*)x, "En-tête de paquet inconnu.");
+                object_error((t_object*)x, "Unknown packet header.");
                 return;
         }
 
@@ -370,7 +396,7 @@ void cisReceive_read(t_cisReceive *x) {
                 atom_setlong(&(x->atom_buffer_B[i]), (long)x->image_buffer_B[i]);
             }
             
-            // Envoyer la liste d'atoms
+            // Send the atom list
             send_data_to_outlet(x, s_Line_R, CIS_PIXELS_NB, x->atom_buffer_R);
             send_data_to_outlet(x, s_Line_G, CIS_PIXELS_NB, x->atom_buffer_G);
             send_data_to_outlet(x, s_Line_B, CIS_PIXELS_NB, x->atom_buffer_B);
@@ -383,7 +409,7 @@ void cisReceive_clock_tick(t_cisReceive *x) {
     defer_low(x, (method)send_data_to_outlet, s_LineLow_G, CIS_PIXELS_NB, x->atom_buffer_G);
     defer_low(x, (method)send_data_to_outlet, s_LineLow_B, CIS_PIXELS_NB, x->atom_buffer_B);
 
-    // Planifier le prochain tick pour dans 10 ms
+    // Schedule the next tick in 10 ms
     clock_delay(x->clock, 10);
 }
 
@@ -471,25 +497,25 @@ int syssock_set(t_cisReceive *x) {
         object_error((t_object*)x, "Cannot bind to port %d", x->port);
         return -1;
     } else {
-        post("Socket bound to port %d", x->port); // Confirmation de la liaison au port
+        post("Socket bound to port %d", x->port); // Confirmation of binding to port
     }
 
     x->listening = true;
-    systhread_create((method)cisReceive_read, x, 0, 8192, 0, &(x->listener));
+    systhread_create((method)cisReceive_read, x, 0, 32768, 0, &(x->listener));
 
     return 0;
 }
 
 int syssock_addmulticast(t_syssocket sockfd, char* ip) {
-	struct ip_mreq mreq;
-	mreq.imr_multiaddr.s_addr = syssock_inet_addr(ip);
-	mreq.imr_interface.s_addr = htonl(INADDR_ANY);
-	return syssock_setsockopt(sockfd, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char*)&mreq, sizeof(mreq));
+    struct ip_mreq mreq;
+    mreq.imr_multiaddr.s_addr = syssock_inet_addr(ip);
+    mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+    return syssock_setsockopt(sockfd, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char*)&mreq, sizeof(mreq));
 }
 
 int syssock_dropmulticast(t_syssocket sockfd, char* ip) {
-	struct ip_mreq mreq;
-	mreq.imr_multiaddr.s_addr = syssock_inet_addr(ip);
-	mreq.imr_interface.s_addr = htonl(INADDR_ANY);
-	return syssock_setsockopt(sockfd, IPPROTO_IP, IP_DROP_MEMBERSHIP, (char*)&mreq, sizeof(mreq));
+    struct ip_mreq mreq;
+    mreq.imr_multiaddr.s_addr = syssock_inet_addr(ip);
+    mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+    return syssock_setsockopt(sockfd, IPPROTO_IP, IP_DROP_MEMBERSHIP, (char*)&mreq, sizeof(mreq));
 }
