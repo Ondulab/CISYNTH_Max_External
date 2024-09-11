@@ -4,7 +4,7 @@
 
 ## Description
 
-The Spectral Sound Scanner (SSS) is an innovative tangible interface for creating music and visuals. Utilizing our CIS instrument, the SSS produces a UDP stream of thousands of values captured by contact image sensor, transmitted at a frequency up to 1000 Hz. This stream can be used to generate music or display image stream in Max/MSP, Pure Data, and our [Viewer](https://github.com/Ondulab/SSS_Viewer).
+The CYSINTH is an innovative tangible interface for creating music and visuals. Utilizing our CIS instrument, the CISYNTH produces a UDP stream of thousands of values captured by contact image sensor, transmitted at a frequency up to 1000 Hz. This stream can be used to generate music or display image stream in Max/MSP, Pure Data, and our [Viewer]([https://github.com/Ondulab/CISYNTH_Viewer]).
 
 ## Project Status
 This project is currently in the initial development phase and has not been released for public use yet. Please note that it may contain incomplete features and is not recommended for production environments at this stage.
@@ -19,21 +19,96 @@ Our device now supports Power over Ethernet (PoE), which simplifies cabling and 
 
 The integration of an inertial measurement unit enhances accuracy in motion capture and spatial orientation.
 
-### User Interface
+#### HTTP Server
 
-Interface buttons are provided for fine-tuning the sampling frequency and other parameters.
+The CISYNTH device comes with a built-in HTTP server that allows for easy configuration via a web browser. Access the web interface by navigating to the device's IP address (default: `192.168.0.10`). Below are the key sections and functionalities of the interface:
 
-## Usage
+##### CIS Parameters
 
-- Press the buttons to increase or decrease the sampling frequency.
-- Adjusted settings can be saved and will not persist after a reboot.
+- **DPI (Dots Per Inch)**:  
+  Configures the resolution of the Contact Image Sensor (CIS). Available options:
+  - 200 DPI
+  - 400 DPI
+  
+- **OVSP (Oversampling)**:  
+  Adjusts the oversampling rate to enhance image quality.
 
-To correctly receive and assemble the UDP data:
+- **LPS (Lines Per Second)**:  
+  Sets the line capture rate. Higher values increase performance but may reduce image quality.
 
-1. Listen on the configured UDP port for the data stream.
-2. Receive packets and use the 32-bit header to sequence the segments.
-3. Combine the 6 segments to reconstruct the full line of 1728 pixels.
-4. Repeat the process for each line transmitted by the CIS.
+- **Hand (Left/Right)**:  
+  Select the dominant hand for accurate calibration.
+
+- **Start Calibration**:  
+  Initiates the calibration process based on the selected settings.
+
+##### Network Settings
+
+- **IP Address/Subnet Mask/Gateway**:  
+  Allows the configuration of the Ethernet network settings, including:
+  - IP Address (default: `192.168.0.10`)
+  - Subnet Mask (default: `255.255.255.0`)
+  - Gateway (default: `0.0.0.0`)
+  
+- **Destination IP Address (UDP)**:  
+  Specifies the IP address of the target machine that will receive the UDP data packets.
+
+- **UDP Port**:  
+  Defines the port number for UDP packet transmission (default: `55151`).
+
+> **Note**: After modifying network settings, click **Apply Network Settings** to apply the changes.
+
+##### Firmware Update
+
+To update the firmware via the HTTP interface:
+1. Select the firmware file from your local machine.
+2. Click **Upload Firmware** to initiate the update process.
+
+##### Advanced Settings
+
+- **Factory Reset**:  
+  Restores the device to its original factory settings. Use this option to reset all configurations if needed.
+
+##### How to Access the HTTP Server
+
+1. Connect to the same network as the CISYNTH device.
+2. Open a web browser and enter the IP address of the device (default: `192.168.0.10`).
+3. Use the interface to adjust the parameters as needed.
+
+### FTP SERVER
+
+The CISYNTH device is also equipped with an FTP server, allowing file transfers to and from the device. This server can be accessed using any FTP client.
+
+###### Connection Parameters
+
+- **Protocol**:  
+  The FTP protocol is used for file transfer. Be aware that this connection is not encrypted, so avoid transmitting sensitive data.
+
+- **Host**:  
+  The IP address of the device should be entered here. By default, this is:
+  - IP: `192.168.0.10`
+
+- **Port**:  
+  You can use the default FTP port (`21`) unless you have configured the server to use a custom port.
+
+- **Encryption**:  
+  The FTP connection used is non-encrypted (FTP simple). For secure data transmission, consider using SFTP if supported.
+
+- **Authentication Type**:  
+  - **Anonymous**:  
+    By default, the server allows anonymous access. This means no username or password is required to connect to the FTP server.  
+    You can adjust this setting for added security if needed.
+
+###### Using an FTP Client
+
+1. Open your preferred FTP client (e.g., FileZilla).
+2. Enter the connection details as described above (IP address, protocol, etc.).
+3. Connect to the server. For anonymous access, leave the username and password fields blank.
+4. Once connected, you can upload or download files to and from the device.
+
+## Uing MAX8
+
+“Download our Max examples along with the cis_receive external at: Réso-nance Numérique and connect the CISYNTH.”
 
 For more information on the Spectral Sound Scanner and other innovative projects, visit our website at [Réso-nance Numérique](https://reso-nance.org/).
 
