@@ -4,27 +4,27 @@
 
 ## Description
 
-The CYSINTH is an innovative tangible interface for creating music and visuals. Utilizing our CIS instrument, the CISYNTH produces a UDP stream of thousands of values captured by contact image sensor, transmitted at a frequency up to 1000 Hz. This stream can be used to generate music or display image stream in Max/MSP, Pure Data, and our [Viewer]([https://github.com/Ondulab/CISYNTH_Viewer]).
+The CYSINTH is an innovative tangible interface for creating music and visuals. Utilizing our CIS instrument, The CISYNTH generates a UDP stream containing thousands of values captured by both the contact image sensor and the inertial measurement unit, transmitted at frequencies of up to 1kHz. This stream can be used to generate music or display image stream in Max/MSP, Pure Data, and our [Viewer]([https://github.com/Ondulab/CISYNTH_Viewer]).
 
 ## Project Status
-This project is currently in the initial development phase and has not been released for public use yet. Please note that it may contain incomplete features and is not recommended for production environments at this stage.
+This project is now in an advanced stage of maturity, nearing the product’s commercialization. Please note that while most features are complete, minor adjustments may still be made as we prepare for the final release.
 
 ## Features
 
 ### Power over Ethernet (PoE)
 
-Our device now supports Power over Ethernet (PoE), which simplifies cabling and installation by allowing both electrical power and data transfer over a single Ethernet cable.
+Our device supports Power over Ethernet (PoE), which simplifies cabling and installation by allowing both electrical power and data transfer over a single Ethernet cable.
 
 ### Inertial Measurement Unit (IMU)
 
-The integration of an inertial measurement unit enhances accuracy in motion capture and spatial orientation.
+The integration of an inertial measurement unit enables precise 3D gesture tracking, allowing for detailed.
 
 #### HTTP Server
 
-The CISYNTH device comes with a built-in HTTP server that allows for easy configuration via a web browser. Access the web interface by navigating to the device's IP address (default: `192.168.0.10`). Below are the key sections and functionalities of the interface:
+The CISYNTH device comes with a built-in HTTP server that allows for easy configuration via a web browser. Access the web interface by navigating to the device's IP address (default: `[192.168.0.10](http://192.168.0.10/config.html)`). Below are the key sections and functionalities of the interface:
 
 ##### CIS Parameters
-
+/
 - **DPI (Dots Per Inch)**:  
   Configures the resolution of the Contact Image Sensor (CIS). Available options:
   - 200 DPI
@@ -34,7 +34,7 @@ The CISYNTH device comes with a built-in HTTP server that allows for easy config
   Adjusts the oversampling rate to enhance image quality.
 
 - **LPS (Lines Per Second)**:  
-  Sets the line capture rate. Higher values increase performance but may reduce image quality.
+  Visualize the line capture rate. Higher values improve performance but may reduce image quality.
 
 - **Hand (Left/Right)**:  
   Select the dominant hand for accurate calibration.
@@ -69,20 +69,14 @@ To update the firmware via the HTTP interface:
 - **Factory Reset**:  
   Restores the device to its original factory settings. Use this option to reset all configurations if needed.
 
-##### How to Access the HTTP Server
-
-1. Connect to the same network as the CISYNTH device.
-2. Open a web browser and enter the IP address of the device (default: `192.168.0.10`).
-3. Use the interface to adjust the parameters as needed.
-
-### FTP SERVER
+#### FTP SERVER
 
 The CISYNTH device is also equipped with an FTP server, allowing file transfers to and from the device. This server can be accessed using any FTP client.
 
 ###### Connection Parameters
 
 - **Protocol**:  
-  The FTP protocol is used for file transfer. Be aware that this connection is not encrypted, so avoid transmitting sensitive data.
+  Be aware that this connection is not encrypted, so avoid transmitting sensitive data.
 
 - **Host**:  
   The IP address of the device should be entered here. By default, this is:
@@ -92,7 +86,7 @@ The CISYNTH device is also equipped with an FTP server, allowing file transfers 
   You can use the default FTP port (`21`) unless you have configured the server to use a custom port.
 
 - **Encryption**:  
-  The FTP connection used is non-encrypted (FTP simple). For secure data transmission, consider using SFTP if supported.
+  The FTP connection used is non-encrypted (FTP simple).
 
 - **Authentication Type**:  
   - **Anonymous**:  
@@ -108,21 +102,35 @@ The CISYNTH device is also equipped with an FTP server, allowing file transfers 
 
 ## Uing MAX8
 
-“Download our Max examples along with the cis_receive external at: Réso-nance Numérique and connect the CISYNTH.”
+Download our Max examples along with the **cis_receive** external from: [Réso-nance Numérique](https://github.com/Ondulab/CISYNTH_Max_Patchs) and connect the CISYNTH.
 
-For more information on the Spectral Sound Scanner and other innovative projects, visit our website at [Réso-nance Numérique](https://reso-nance.org/).
-
-## Installation
-
-To install the firmware on your Spectral Sound Scanner:
-
-1. Clone the repository to your local system.
-2. Follow the network configuration instructions to enable UDP communication with your device.
-3. Load the firmware onto the CIS following the detailed installation guide.
+Manually configure the network connection:
+  - **IP Address**: `192.168.0.1`
+  - **Subnet Mask**: `255.255.255.0`
+  - **Gateway**: `0.0.0.0`
 
 ## Contributions
 
-Contributions to this project are welcome. Please submit your pull requests or issues via GitHub.
+Contributions to this project are welcome. Please submit your pull requests or report issues via GitHub.  
+For more information on the Spectral Sound Scanner and other innovative projects, visit our website at [Réso-nance Numérique](https://reso-nance.org/).
+
+For any questions or inquiries, you can also contact us via email at **contact@reso-nance.org**.
+
+## Technical Specifications
+
+| **Characteristic**          | **Details**                                 |
+|-----------------------------|---------------------------------------------|
+| **Weight**                  | 290g                                        |
+| **Dimensions**               | L 264mm x W 32mm x H 21mm                   |
+| **Connector**                | RJ45 Ethernet                               |
+| **Power Supply**             | 12V PoE                                     |
+| **Max Power Consumption**    | 10W                                         |
+| **Display**                  | OLED screen 256x64                          |
+| **Buttons**                  | 3 physical buttons                         |
+| **Image Sensor**             | M118-232C3_V1.51                            |
+| **Inertial Measurement Unit**| ICM42688                                    |
+| **Operating Temperature Range** | 0°C to 40°C                              |
+| **Compliance**               | CE Marking                                  |
 
 ## License
 
