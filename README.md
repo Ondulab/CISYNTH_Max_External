@@ -122,7 +122,7 @@ Sources :
 [Bootloader](https://github.com/Ondulab/CISYNTH_CIS_Bootloader), 
 [Electronics](https://github.com/Ondulab/CISYNTH_CIS_Electronics), 
 [Mechanics](https://github.com/Ondulab/CISYNTH_CIS_Mechanics), 
-[Max Patchs](https://github.com/Ondulab/CISYNTH_Max_Externals).
+[Max Patchs](https://github.com/Ondulab/CISYNTH_Max_External).
 
 ## Technical Specifications
 
