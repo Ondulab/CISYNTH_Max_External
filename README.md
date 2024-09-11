@@ -121,7 +121,7 @@ Sources :
 [Firmware](https://github.com/Ondulab/CISYNTH_CIS_Firmware), 
 [Bootloader](https://github.com/Ondulab/CISYNTH_CIS_Bootloader), 
 [Electronics](https://github.com/Ondulab/CISYNTH_CIS_Electronics), 
-[Mechanicals](https://github.com/Ondulab/CISYNTH_CIS_Mechanicals), 
+[Mechanics](https://github.com/Ondulab/CISYNTH_CIS_Mechanics), 
 [Max Patchs](https://github.com/Ondulab/CISYNTH_Max_Externals).
 
 ## Technical Specifications
