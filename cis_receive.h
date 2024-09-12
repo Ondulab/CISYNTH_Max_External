@@ -103,7 +103,7 @@ typedef struct _cisReceive {    // defines our object's internal variables for e
     bool line_complete;         // TRUE if receive complete ligne
     
     uint32_t startup_packet_id; // Optional: to store the startup packet ID
-    char version_info[64];      // Added to store version information
+    char version_info[64];      	// Added to store version information
     
     void *outlet_Image;
     void *outlet_LowImage;

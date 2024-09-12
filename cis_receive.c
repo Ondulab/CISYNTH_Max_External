@@ -48,7 +48,7 @@ void ext_main(void *r)
     c = class_new("cis_receive", (method)cisReceive_new, (method)cisReceive_free, sizeof(t_cisReceive), 0L, A_GIMME, 0);     // class_new() loads our external's class into Max's memory so it can be used in a patch
     class_register(CLASS_BOX, c);                                                                                        // register to CLASS_BOX type for max environment
     cisReceiveclass = c;
-    post("cis_receive v0.06 - 31.12.2023");
+    post("cis_receive v1.00 - 12.09.2024");
 }
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------------
