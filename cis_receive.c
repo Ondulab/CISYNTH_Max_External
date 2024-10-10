@@ -32,7 +32,7 @@ static t_symbol *s_HID_B3;
 void cisReceive_readStartupInfo(t_cisReceive *x, void *data, uint16_t length);
 void cisReceive_readImageData(t_cisReceive *x, void *data, uint16_t length);
 void cisReceive_readImuData(t_cisReceive *x, void *data, uint16_t length);
-void cisReceive_readHidData(t_cisReceive *x, void *data, uint16_t length);
+void cisReceive_readButtonData(t_cisReceive *x, void *data, uint16_t length);
 void send_data_to_outlet(void* object, t_symbol* sel, int argc, t_atom* argv);
 void cisReceive_clock_tick(t_cisReceive *x);
 
@@ -48,7 +48,7 @@ void ext_main(void *r)
     c = class_new("cis_receive", (method)cisReceive_new, (method)cisReceive_free, sizeof(t_cisReceive), 0L, A_GIMME, 0);     // class_new() loads our external's class into Max's memory so it can be used in a patch
     class_register(CLASS_BOX, c);                                                                                        // register to CLASS_BOX type for max environment
     cisReceiveclass = c;
-    post("cis_receive v1.00 - 12.09.2024");
+    post("cis_receive v1.02 - 10.10.2024");
 }
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -305,14 +305,26 @@ void cisReceive_readImuData(t_cisReceive *x, void *data, uint16_t length) {
     }
 }
 
-void cisReceive_readHidData(t_cisReceive *x, void *data, uint16_t length) {
-    if (length == sizeof(struct packet_HID)) {
-        struct packet_HID *packet = (struct packet_HID *)data;
+void cisReceive_readButtonData(t_cisReceive *x, void *data, uint16_t length) {
+    if (length == sizeof(struct packet_Button)) {
+        struct packet_Button *packet = (struct packet_Button *)data;
 
         // Update button states in x structure
-        x->HID_B1 = packet->button_A;
-        x->HID_B2 = packet->button_B;
-        x->HID_B3 = packet->button_C;
+        // Update button states in x structure
+        switch (packet->button_id)
+        {
+            case SW1:
+                x->HID_B1 = packet->button_state.state;
+                break;
+            case SW2:
+                x->HID_B2 = packet->button_state.state;
+                break;
+            case SW3:
+                x->HID_B3 = packet->button_state.state;
+                break;
+            default:
+                break;
+        }
 
         // Post button states or trigger actions
         //post("HID Packet ID: %u, Button A: %u, Button B: %u, Button C: %u", packet->packet_id, packet->button_A, packet->button_B, packet->button_C);
@@ -371,9 +383,9 @@ void cisReceive_read(t_cisReceive *x) {
                     object_error((t_object*)x, "Malformed IMU_DATA_HEADER packet.");
                 }
                 break;
-            case HID_DATA_HEADER:
-                if (nbytes >= sizeof(struct packet_HID)) {
-                    cisReceive_readHidData(x, msgbuf, nbytes);
+            case BUTTON_DATA_HEADER:
+                if (nbytes >= sizeof(struct packet_Button)) {
+                    cisReceive_readButtonData(x, msgbuf, nbytes);
                     atom_setlong(x->atom_HID_B1, (long)x->HID_B1);
                     atom_setlong(x->atom_HID_B2, (long)x->HID_B2);
                     atom_setlong(x->atom_HID_B3, (long)x->HID_B3);
@@ -519,3 +531,53 @@ int syssock_dropmulticast(t_syssocket sockfd, char* ip) {
     mreq.imr_interface.s_addr = htonl(INADDR_ANY);
     return syssock_setsockopt(sockfd, IPPROTO_IP, IP_DROP_MEMBERSHIP, (char*)&mreq, sizeof(mreq));
 }
+
+//---------------------------------------------------------------------------------------------------------------------------------------------------------
+// TCP handle
+//---------------------------------------------------------------------------------------------------------------------------------------------------------
+
+int tcp_connect(const char* server_ip, int server_port) {
+    int sockfd;
+    struct sockaddr_in server_addr;
+
+    // Crée un socket TCP
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd < 0) {
+        perror("Erreur lors de la création du socket");
+        return -1;
+    }
+
+    // Configure l'adresse du serveur
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(server_port);
+    if (inet_pton(AF_INET, server_ip, &server_addr.sin_addr) <= 0) {
+        perror("Adresse non valide ou non supportée");
+        return -1;
+    }
+
+    // Connecte au serveur
+    if (connect(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+        perror("Erreur lors de la connexion");
+        return -1;
+    }
+
+    return sockfd; // retourne le descripteur du socket
+}
+
+ssize_t tcp_send(int sockfd, const void* data, size_t length) {
+    return send(sockfd, data, length, 0); // Envoi des données via TCP
+}
+
+void send_led_command(int sockfd) {
+    struct led_State cmd = {1, 5, 1, 500, 500, 0.1, 0.1};
+    
+    if (tcp_send(sockfd, &cmd, sizeof(cmd)) < 0) {
+        perror("Erreur lors de l'envoi de la commande LED");
+    }
+}
+
+//int sockfd = tcp_connect("192.168.1.100", 12345); // Adresse IP et port du serveur
+//if (sockfd >= 0) {
+//    send_led_command(sockfd); // Envoie la commande LED
+//    close(sockfd); // Ferme la connexion après l'envoi
+//}

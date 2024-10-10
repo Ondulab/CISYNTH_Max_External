@@ -41,29 +41,72 @@
 #define DEFAULT_PORT    PORT
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------------
-// STRUCTURE
+//  COMMON STRUCTURE CIS / MAX
 //---------------------------------------------------------------------------------------------------------------------------------------------------------
+
+typedef enum
+{
+    SW1  = 0,
+    SW2,
+    SW3,
+}buttonIdTypeDef;
+
+typedef enum
+{
+    SWITCH_RELEASED = 0,
+    SWITCH_PRESSED
+}buttonStateTypeDef;
+
+typedef enum
+{
+    LED_1 = 0,
+    LED_2,
+    LED_3,
+}ledIdTypeDef;
 
 typedef enum
 {
     STARTUP_INFO_HEADER = 0,
     IMAGE_DATA_HEADER,
     IMU_DATA_HEADER,
-    HID_DATA_HEADER,
+    BUTTON_DATA_HEADER,
+    LED_DATA_HEADER,
 }CIS_Packet_HeaderTypeDef;
 
+typedef enum
+{
+    IMAGE_COLOR_R = 0,
+    IMAGE_COLOR_G,
+    IMAGE_COLOR_B,
+}CIS_Packet_ImageColorTypeDef;
+
+typedef enum
+{
+    CIS_CAL_REQUESTED = 0,
+    CIS_CAL_START,
+    CIS_CAL_PLACE_ON_WHITE,
+    CIS_CAL_PLACE_ON_BLACK,
+    CIS_CAL_EXTRACT_INNACTIVE_REF,
+    CIS_CAL_EXTRACT_EXTREMUMS,
+    CIS_CAL_EXTRACT_OFFSETS,
+    CIS_CAL_COMPUTE_GAINS,
+    CIS_CAL_END,
+}CIS_Calibration_StateTypeDef;
+
 // Packet header structure defining the common header for all packet types// Structure for packets containing startup information like version info
-struct packet_StartupInfo{
-    uint8_t type;                         // Identifies the data type
+struct __attribute__((aligned(4))) packet_StartupInfo
+{
+    CIS_Packet_HeaderTypeDef type;         // Identifies the data type
     uint32_t packet_id;                   // Sequence number, useful for ordering packets
     uint8_t version_info[64];             // Information about the version, and other startup details
 };
 
 // Structure for image data packets, including metadata for image fragmentation
-struct packet_Image{
-    uint8_t type;                         // Identifies the data type
+struct __attribute__((aligned(4))) packet_Image
+{
+    CIS_Packet_HeaderTypeDef type;                         // Identifies the data type
     uint32_t packet_id;                   // Sequence number, useful for ordering packets
-    uint32_t line_id;                     // Line identifier
+    uint32_t line_id;                      // Line identifier
     uint8_t fragment_id;                  // Fragment position
     uint8_t total_fragments;              // Total number of fragments for the complete image
     uint16_t fragment_size;               // Size of this particular fragment
@@ -72,24 +115,62 @@ struct packet_Image{
     uint8_t imageData_B[CIS_PIXELS_NB / UDP_NB_PACKET_PER_LINE];               // Pointer to the fragmented blue image data
 };
 
+struct __attribute__((aligned(4))) button_State
+{
+    buttonStateTypeDef state;
+    uint32_t pressed_time;
+};
+
 // Structure for packets containing button state information
-struct packet_HID {
-    uint8_t type;                         // Identifies the data type
+struct __attribute__((aligned(4))) packet_Button
+{
+    CIS_Packet_HeaderTypeDef type;                         // Identifies the data type
     uint32_t packet_id;                   // Sequence number, useful for ordering packets
-    uint8_t button_A;                     // State of the buttons (pressed/released, etc.)
-    uint8_t button_B;                     // State of the buttons (pressed/released, etc.)
-    uint8_t button_C;                     // State of the buttons (pressed/released, etc.)
+    buttonIdTypeDef button_id;                 // Id of the button
+    struct button_State button_state;         // State of the led A
+};
+
+struct __attribute__((aligned(4))) led_State
+{
+    uint16_t brightness_1;
+    uint16_t time_1;
+    uint16_t glide_1;
+    uint16_t brightness_2;
+    uint16_t time_2;
+    uint16_t glide_2;
+    uint32_t blink_count;
+};
+
+// Structure for packets containing leds state
+struct __attribute__((aligned(4))) packet_Leds
+{
+    CIS_Packet_HeaderTypeDef type;                         // Identifies the data type
+    uint32_t packet_id;                   // Sequence number, useful for ordering packets
+    ledIdTypeDef led_id;                 // Id of the led
+    struct led_State led_state;         // State of the selected led
 };
 
 // Structure for packets containing sensor data (accelerometer and gyroscope)
-struct packet_IMU {
-    uint8_t type;                         // Identifies the data type
+struct __attribute__((aligned(4))) packet_IMU
+{
+    CIS_Packet_HeaderTypeDef type;                         // Identifies the data type
     uint32_t packet_id;                   // Sequence number, useful for ordering packets
-    float_t acc[3];                       // Accelerometer data: x, y, and z axis
-    float_t gyro[3];                      // Gyroscope data: x, y, and z axis
-    float_t integrated_acc[3];            // Accelerometer data: x, y, and z axis
-    float_t integrated_gyro[3];           // Gyroscope data: x, y, and z axis
+    float_t acc[3];                   // Accelerometer data: x, y, and z axis
+    float_t gyro[3];                  // Gyroscope data: x, y, and z axis
+    float_t integrated_acc[3];        // Accelerometer data: x, y, and z axis
+    float_t integrated_gyro[3];       // Gyroscope data: x, y, and z axis
 };
+
+struct __attribute__((aligned(4))) cisRgbBuffers
+{
+    uint8_t R[CIS_PIXELS_NB];
+    uint8_t G[CIS_PIXELS_NB];
+    uint8_t B[CIS_PIXELS_NB];
+};
+
+//---------------------------------------------------------------------------------------------------------------------------------------------------------
+//  MAX STRUCTURE
+//---------------------------------------------------------------------------------------------------------------------------------------------------------
 
 typedef struct _cisReceive {    // defines our object's internal variables for each instance in a patch
 	t_object    s_ob;			// object header - ALL objects MUST begin with this...
