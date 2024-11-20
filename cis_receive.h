@@ -20,25 +20,31 @@
 // DEFINES
 //---------------------------------------------------------------------------------------------------------------------------------------------------------
 
-//#define RGBA_BUFFER
+#define CIS_400DPI_PIXELS_NB                    (3456)
+#define CIS_200DPI_PIXELS_NB                    (1728)
 
-#define UDP_NB_PACKET_PER_LINE                   (12)
-#define UDP_PACKET_SIZE                          ((CIS_PIXELS_NB) / (UDP_NB_PACKET_PER_LINE))
+#define CIS_MAX_PIXELS_PER_LANE                 (CIS_400DPI_PIXELS_PER_LANE)
 
-#define PORT                                     (55151)    //The port on which to listen for incoming data
+// Number of UDP packets per line
+#define UDP_MAX_NB_PACKET_PER_LINE              (12)
 
-#ifdef CIS_400DPI
-#define CIS_PIXELS_PER_LINE                      (1152)
-#else
-#define CIS_PIXELS_PER_LINE                      (576)
+#define CIS_400DPI_PIXELS_NB                    (3456)
+#define CIS_200DPI_PIXELS_NB                    (1728)
+
+#define CIS_MAX_PIXELS_NB                       (CIS_400DPI_PIXELS_NB)
+
+// Ensure UDP_LINE_FRAGMENT_SIZE is an integer
+#if (CIS_MAX_PIXELS_NB % UDP_MAX_NB_PACKET_PER_LINE) != 0
+  #error "CIS_MAX_PIXELS_NB must be divisible by UDP_NB_PACKET_PER_LINE."
 #endif
 
-#define CIS_ADC_OUT_LINES                        (3)
+// Size of each UDP line fragment (number of pixels per packet)
+#define UDP_LINE_FRAGMENT_SIZE                  (CIS_MAX_PIXELS_NB / UDP_MAX_NB_PACKET_PER_LINE)
 
-#define CIS_PIXELS_NB                            ((CIS_PIXELS_PER_LINE * CIS_ADC_OUT_LINES))
+#define PORT                                    (55151)    //The port on which to listen for incoming data
 
-#define DEFAULT_MULTI    "192.168.0.1"
-#define DEFAULT_PORT    PORT
+#define DEFAULT_MULTI                           "192.168.0.1"
+#define DEFAULT_PORT                            PORT
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------------
 //  COMMON STRUCTURE CIS / MAX
@@ -98,21 +104,21 @@ struct __attribute__((aligned(4))) packet_StartupInfo
 {
     CIS_Packet_HeaderTypeDef type;         // Identifies the data type
     uint32_t packet_id;                   // Sequence number, useful for ordering packets
-    uint8_t version_info[64];             // Information about the version, and other startup details
+    uint8_t version_info[32];             // Information about the version, and other startup details
 };
 
 // Structure for image data packets, including metadata for image fragmentation
 struct __attribute__((aligned(4))) packet_Image
 {
-    CIS_Packet_HeaderTypeDef type;                         // Identifies the data type
-    uint32_t packet_id;                   // Sequence number, useful for ordering packets
-    uint32_t line_id;                      // Line identifier
-    uint8_t fragment_id;                  // Fragment position
-    uint8_t total_fragments;              // Total number of fragments for the complete image
-    uint16_t fragment_size;               // Size of this particular fragment
-    uint8_t imageData_R[CIS_PIXELS_NB / UDP_NB_PACKET_PER_LINE];               // Pointer to the fragmented red image data
-    uint8_t imageData_G[CIS_PIXELS_NB / UDP_NB_PACKET_PER_LINE];               // Pointer to the fragmented green image data
-    uint8_t imageData_B[CIS_PIXELS_NB / UDP_NB_PACKET_PER_LINE];               // Pointer to the fragmented blue image data
+    CIS_Packet_HeaderTypeDef type;                     // Identifies the data type
+    uint32_t packet_id;                               // Sequence number, useful for ordering packets
+    uint32_t line_id;                                  // Line identifier
+    uint8_t fragment_id;                              // Fragment position
+    uint8_t total_fragments;                          // Total number of fragments for the complete image
+    uint16_t fragment_size;                           // Size of this particular fragment
+    uint8_t imageData_R[UDP_LINE_FRAGMENT_SIZE];       // Pointer to the fragmented red image data
+    uint8_t imageData_G[UDP_LINE_FRAGMENT_SIZE];      // Pointer to the fragmented green image data
+    uint8_t imageData_B[UDP_LINE_FRAGMENT_SIZE];    // Pointer to the fragmented blue image data
 };
 
 struct __attribute__((aligned(4))) button_State
@@ -163,9 +169,9 @@ struct __attribute__((aligned(4))) packet_IMU
 
 struct __attribute__((aligned(4))) cisRgbBuffers
 {
-    uint8_t R[CIS_PIXELS_NB];
-    uint8_t G[CIS_PIXELS_NB];
-    uint8_t B[CIS_PIXELS_NB];
+    uint8_t R[CIS_MAX_PIXELS_NB];
+    uint8_t G[CIS_MAX_PIXELS_NB];
+    uint8_t B[CIS_MAX_PIXELS_NB];
 };
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -181,13 +187,13 @@ typedef struct _cisReceive {    // defines our object's internal variables for e
 	char* multicast;			// multicast address
 	int port;					// UDP reveiving port
     
-    bool line_complete;         // TRUE if receive complete ligne
-    
     uint32_t startup_packet_id; // Optional: to store the startup packet ID
     char version_info[64];      	// Added to store version information
     
-    void *outlet_Image;
-    void *outlet_LowImage;
+    void *outlet_sync;
+    void *outlet_R;
+    void *outlet_G;
+    void *outlet_B;
     void *outlet_IMU;
     void *outlet_HID;
     
@@ -219,7 +225,9 @@ typedef struct _cisReceive {    // defines our object's internal variables for e
     t_atom *atom_HID_B2;
     t_atom *atom_HID_B3;
     
-    t_clock *clock; // Add clock for timing
+    struct led_State leds[3];
+    long dummy_attr;
+    
 } t_cisReceive;
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------------
