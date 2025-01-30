@@ -12,7 +12,7 @@
 #include <windows.h>
 #include <io.h>
 #include <stdint.h>
-#include <stdint.h>  // Windows ne définit pas uint8_t, etc.
+typedef SSIZE_T ssize_t;
 #else
 #include <unistd.h>
 #include <arpa/inet.h>
@@ -20,6 +20,12 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <fcntl.h>
+#endif
+
+#ifdef _WIN32
+#define PACKED_STRUCT __declspec(align(4))
+#else
+#define PACKED_STRUCT __attribute__((aligned(4)))
 #endif
 
 #ifndef CIS_RECEIVE
@@ -112,7 +118,7 @@ typedef enum
 }CIS_Calibration_StateTypeDef;
 
 // Packet header structure defining the common header for all packet types// Structure for packets containing startup information like version info
-struct __attribute__((aligned(4))) packet_StartupInfo
+struct PACKED_STRUCT packet_StartupInfo
 {
     CIS_Packet_HeaderTypeDef type;         // Identifies the data type
     uint32_t packet_id;                   // Sequence number, useful for ordering packets
@@ -120,7 +126,7 @@ struct __attribute__((aligned(4))) packet_StartupInfo
 };
 
 // Structure for image data packets, including metadata for image fragmentation
-struct __attribute__((aligned(4))) packet_Image
+struct PACKED_STRUCT packet_Image
 {
     CIS_Packet_HeaderTypeDef type;                     // Identifies the data type
     uint32_t packet_id;                               // Sequence number, useful for ordering packets
@@ -133,14 +139,14 @@ struct __attribute__((aligned(4))) packet_Image
     uint8_t imageData_B[UDP_LINE_FRAGMENT_SIZE];    // Pointer to the fragmented blue image data
 };
 
-struct __attribute__((aligned(4))) button_State
+struct PACKED_STRUCT button_State
 {
     buttonStateTypeDef state;
     uint32_t pressed_time;
 };
 
 // Structure for packets containing button state information
-struct __attribute__((aligned(4))) packet_Button
+struct PACKED_STRUCT packet_Button
 {
     CIS_Packet_HeaderTypeDef type;                         // Identifies the data type
     uint32_t packet_id;                   // Sequence number, useful for ordering packets
@@ -148,7 +154,7 @@ struct __attribute__((aligned(4))) packet_Button
     struct button_State button_state;         // State of the led A
 };
 
-struct __attribute__((aligned(4))) led_State
+struct PACKED_STRUCT led_State
 {
     uint16_t brightness_1;
     uint16_t time_1;
@@ -160,7 +166,7 @@ struct __attribute__((aligned(4))) led_State
 };
 
 // Structure for packets containing leds state
-struct __attribute__((aligned(4))) packet_Leds
+struct PACKED_STRUCT packet_Leds
 {
     CIS_Packet_HeaderTypeDef type;                         // Identifies the data type
     uint32_t packet_id;                   // Sequence number, useful for ordering packets
@@ -169,7 +175,7 @@ struct __attribute__((aligned(4))) packet_Leds
 };
 
 // Structure for packets containing sensor data (accelerometer and gyroscope)
-struct __attribute__((aligned(4))) packet_IMU
+struct PACKED_STRUCT packet_IMU
 {
     CIS_Packet_HeaderTypeDef type;                         // Identifies the data type
     uint32_t packet_id;                   // Sequence number, useful for ordering packets
@@ -179,7 +185,7 @@ struct __attribute__((aligned(4))) packet_IMU
     float_t integrated_gyro[3];       // Gyroscope data: x, y, and z axis
 };
 
-struct __attribute__((aligned(4))) cisRgbBuffers
+struct PACKED_STRUCT cisRgbBuffers
 {
     uint8_t R[CIS_MAX_PIXELS_NB];
     uint8_t G[CIS_MAX_PIXELS_NB];

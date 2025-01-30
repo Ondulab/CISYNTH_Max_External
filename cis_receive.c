@@ -158,23 +158,23 @@ void *cisReceive_new(t_symbol *s, long argc, t_atom *argv)
     x->multicast = DEFAULT_MULTI;
     
     // Initialize the image buffers
-    x->image_buffer_R = allocate_and_check((t_object*)x, CIS_MAX_PIXELS_NB);
-    x->image_buffer_G = allocate_and_check((t_object*)x, CIS_MAX_PIXELS_NB);
-    x->image_buffer_B = allocate_and_check((t_object*)x, CIS_MAX_PIXELS_NB);
+    x->image_buffer_R = (uint8_t*)allocate_and_check((t_object*)x, CIS_MAX_PIXELS_NB);
+    x->image_buffer_G = (uint8_t*)allocate_and_check((t_object*)x, CIS_MAX_PIXELS_NB);
+    x->image_buffer_B = (uint8_t*)allocate_and_check((t_object*)x, CIS_MAX_PIXELS_NB);
 
     // Initialize the atom buffers for output
-    x->atom_buffer_R = allocate_and_check((t_object*)x, CIS_MAX_PIXELS_NB * sizeof(t_atom));
-    x->atom_buffer_G = allocate_and_check((t_object*)x, CIS_MAX_PIXELS_NB * sizeof(t_atom));
-    x->atom_buffer_B = allocate_and_check((t_object*)x, CIS_MAX_PIXELS_NB * sizeof(t_atom));
-    x->atom_IMU_Ax = allocate_and_check((t_object*)x, sizeof(t_atom));
-    x->atom_IMU_Ay = allocate_and_check((t_object*)x, sizeof(t_atom));
-    x->atom_IMU_Az = allocate_and_check((t_object*)x, sizeof(t_atom));
-    x->atom_IMU_Gx = allocate_and_check((t_object*)x, sizeof(t_atom));
-    x->atom_IMU_Gy = allocate_and_check((t_object*)x, sizeof(t_atom));
-    x->atom_IMU_Gz = allocate_and_check((t_object*)x, sizeof(t_atom));
-    x->atom_HID_B1 = allocate_and_check((t_object*)x, sizeof(t_atom));
-    x->atom_HID_B2 = allocate_and_check((t_object*)x, sizeof(t_atom));
-    x->atom_HID_B3 = allocate_and_check((t_object*)x, sizeof(t_atom));
+    x->atom_buffer_R = (t_atom*)allocate_and_check((t_object*)x, CIS_MAX_PIXELS_NB * sizeof(t_atom));
+    x->atom_buffer_G = (t_atom*)allocate_and_check((t_object*)x, CIS_MAX_PIXELS_NB * sizeof(t_atom));
+    x->atom_buffer_B = (t_atom*)allocate_and_check((t_object*)x, CIS_MAX_PIXELS_NB * sizeof(t_atom));
+    x->atom_IMU_Ax = (t_atom*)allocate_and_check((t_object*)x, sizeof(t_atom));
+    x->atom_IMU_Ay = (t_atom*)allocate_and_check((t_object*)x, sizeof(t_atom));
+    x->atom_IMU_Az = (t_atom*)allocate_and_check((t_object*)x, sizeof(t_atom));
+    x->atom_IMU_Gx = (t_atom*)allocate_and_check((t_object*)x, sizeof(t_atom));
+    x->atom_IMU_Gy = (t_atom*)allocate_and_check((t_object*)x, sizeof(t_atom));
+    x->atom_IMU_Gz = (t_atom*)allocate_and_check((t_object*)x, sizeof(t_atom));
+    x->atom_HID_B1 = (t_atom*)allocate_and_check((t_object*)x, sizeof(t_atom));
+    x->atom_HID_B2 = (t_atom*)allocate_and_check((t_object*)x, sizeof(t_atom));
+    x->atom_HID_B3 = (t_atom*)allocate_and_check((t_object*)x, sizeof(t_atom));
 
     // Verify that all allocations were successful
     if (!x->image_buffer_R || !x->image_buffer_G || !x->image_buffer_B || !x->atom_buffer_R ||
@@ -450,7 +450,7 @@ void cisReceive_readButtonData(t_cisReceive *x, void *data, uint16_t length)
 
 void cisReceive_read(t_cisReceive *x)
 {
-    uint8_t msgbuf[sizeof(struct packet_Image)];
+    char msgbuf[sizeof(struct packet_Image)];
     uint32_t nbytes;
     socklen_t addrlen = sizeof(x->addr);
 
@@ -637,22 +637,24 @@ int syssock_dropmulticast(t_syssocket sockfd, char* ip)
 
 int set_socket_nonblocking(int sockfd)
 {
+#ifdef _WIN32
+    u_long mode = 1;
+    return ioctlsocket(sockfd, FIONBIO, &mode);
+#else
     int flags = fcntl(sockfd, F_GETFL, 0);
-    if (flags == -1)
-    {
-        return -1;
-    }
     return fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
+#endif
 }
 
 int set_socket_blocking(int sockfd)
 {
+#ifdef _WIN32
+    u_long mode = 0;
+    return ioctlsocket(sockfd, FIONBIO, &mode);
+#else
     int flags = fcntl(sockfd, F_GETFL, 0);
-    if (flags == -1)
-    {
-        return -1;
-    }
     return fcntl(sockfd, F_SETFL, flags & ~O_NONBLOCK);
+#endif
 }
 
 int tcp_connect_nonblocking(const char *server_ip, int server_port, int timeout_seconds)
@@ -715,7 +717,7 @@ int tcp_connect_nonblocking(const char *server_ip, int server_port, int timeout_
     return sockfd;
 }
 
-ssize_t tcp_send(int sockfd, const void *data, size_t length)
+ssize_t tcp_send(int sockfd, const char *data, size_t length)
 {
     ssize_t sent_bytes = send(sockfd, data, length, 0);
     if (sent_bytes < 0)
@@ -738,7 +740,7 @@ void *tcp_send_thread(void *args)
     int sockfd = tcp_connect_nonblocking("192.168.0.10", 5000, 5);
     if (sockfd >= 0)
     {
-        if (tcp_send(sockfd, packet, sizeof(struct packet_Leds)) < 0)
+        if (tcp_send(sockfd, (const char*)packet, sizeof(struct packet_Leds)) < 0)
         {
             fprintf(stderr, "Failed to send LED packet\n");
         }
@@ -759,7 +761,7 @@ void start_tcp_send_thread(ledIdTypeDef led_id, struct led_State led_state)
     static uint32_t packet_id = 0;
 
     // Allocate memory for the LED packet
-    struct packet_Leds *packet = malloc(sizeof(struct packet_Leds));
+    struct packet_Leds* packet = (struct packet_Leds*)malloc(sizeof(struct packet_Leds));
     if (packet == NULL)
     {
         fprintf(stderr, "Memory allocation error for LED packet\n");
