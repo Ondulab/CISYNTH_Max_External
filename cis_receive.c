@@ -108,7 +108,7 @@ void ext_main(void *r)
     s_HID_B2 = gensym("HID_B2");
     s_HID_B3 = gensym("HID_B3");
 
-    post("cis_receive v2.00 - 13.10.2024");
+    post("cis_receive v3.00 - 30.01.2025");
 }
 
 //---------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -461,7 +461,6 @@ void cisReceive_read(t_cisReceive *x)
         if (nbytes < 0)
         {
             object_error((t_object*)x, "Error receiving data: %d", errno);
-            return;
         }
 
         switch (msgbuf[0])
@@ -508,7 +507,6 @@ void cisReceive_read(t_cisReceive *x)
                 break;
             default:
                 object_error((t_object*)x, "Unknown packet header.");
-                return;
         }
     }
 }

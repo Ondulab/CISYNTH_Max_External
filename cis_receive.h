@@ -5,9 +5,21 @@
 // INCLUDES (see http://www.zachburlingame.com/2011/05/resolving-redefinition-errors-betwen-ws2def-h-and-winsock-h/)
 //---------------------------------------------------------------------------------------------------------------------------------------------------------
 
-#ifdef WIN_VERSION
-#define MAXAPI_USE_MSCRT
-#include "stdint.h"
+#ifdef _WIN32
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <windows.h>
+#include <io.h>
+#include <stdint.h>
+#include <stdint.h>  // Windows ne définit pas uint8_t, etc.
+#else
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <fcntl.h>
 #endif
 
 #ifndef CIS_RECEIVE
@@ -72,11 +84,11 @@ typedef enum
 
 typedef enum
 {
-    STARTUP_INFO_HEADER = 0,
-    IMAGE_DATA_HEADER,
-    IMU_DATA_HEADER,
-    BUTTON_DATA_HEADER,
-    LED_DATA_HEADER,
+    STARTUP_INFO_HEADER = 0x11,
+    IMAGE_DATA_HEADER = 0x12,
+    IMU_DATA_HEADER = 0x13,
+    BUTTON_DATA_HEADER= 0x14,
+    LED_DATA_HEADER = 0x15,
 }CIS_Packet_HeaderTypeDef;
 
 typedef enum
